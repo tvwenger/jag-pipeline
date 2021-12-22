@@ -16,5 +16,6 @@ setup(
     description="DRAO JAG data reduction pipeline",
     author="Trey V. Wenger",
     packages=["jagpipe"],
+    install_requires=["numpy", "astropy", "h5py"],
     entry_points={"console_scripts": ["jagpipe-combine=jagpipe.combine:main"]},
 )

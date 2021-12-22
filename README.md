@@ -3,7 +3,26 @@ DRAO JAG Data Reduction Pipeline
 
 ## Installation
 ```bash
-$ pip install --upgrade --force-reinstall git+https://github.com/tvwenger/jag-pipeline.git@0.1a0
+$ pip install git+https://github.com/tvwenger/jag-pipeline.git@0.1a0
+```
+or
+```bash
+$ git clone https://github.com/tvwenger/jag-pipeline.git
+$ cd jag-pipeline
+$ git checkout 0.1a0
+$ pip install .
+```
+
+To reinstall the latest version,
+```bash
+$ pip install --upgrade --force-reinstall --no-deps git+https://github.com/tvwenger/jag-pipeline.git@0.1a0
+```
+or
+```bash
+$ cd jag-pipeline
+$ git checkout 0.1a0
+$ git pull origin 0.1a0
+$ pip --upgrade --force-reinstall --no-deps install .
 ```
 
 ## Usage
