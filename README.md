@@ -34,3 +34,11 @@ optional arguments:
                         Time bin size (default: 1)
   -v, --verbose         Print verbose information (default: False)
 ```
+
+## Quick-Start
+
+You probably want to run the pipeline scripts in this order. Be sure to run each with `--help`
+first so you can configure them to your needs.
+
+* `jagpipe-combine` to combine multiple SDHDF files into one, and optionally bin in time and/or frequency.
+* `jagpipe-flag` to automatically flag interference along the frequency axis
