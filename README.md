@@ -3,7 +3,7 @@ DRAO JAG Data Reduction Pipeline
 
 ## Installation
 ```bash
-$ pip install --upgrade --force-reinstall git+https://github.com/tvwenger/jag-pipeline.git
+$ pip install --upgrade --force-reinstall git+https://github.com/tvwenger/jag-pipeline.git@0.1a0
 ```
 
 ## Usage
@@ -21,7 +21,7 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --version             show program's version number and exit
+  --version             show program\'s version number and exit
   -c CHANBIN, --chanbin CHANBIN
                         Channel bin size (default: 1)
   -t TIMEBIN, --timebin TIMEBIN
