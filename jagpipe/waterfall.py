@@ -77,21 +77,17 @@ def waterfall(
         for datatype, label in zip(datatypes, labels):
             # get data
             print(f"Reading {datatype}")
-            plotdata = np.zeros((len(position), len(frequency)))
-            plotflags = np.zeros((len(position), len(frequency)), dtype=bool)
-            for i, idx in enumerate(range(0, data.shape[0], skiptime)):
-                print(idx, end="\r")
-                plotflags[i] = flag[i, ::skipchan]
-                if datatype == "XX":
-                    plotdata[i] = data[idx, 0, ::skipchan]
-                elif datatype == "YY":
-                    plotdata[i] = data[idx, 1, ::skipchan]
-                elif datatype == "Re(XY)":
-                    plotdata[i] = data[idx, 2, ::skipchan]
-                elif datatype == "Im(XY)":
-                    plotdata[i] = data[idx, 3, ::skipchan]
-                else:
-                    raise ValueError(f"Invalid datatype: {datatype}")
+            if datatype == "XX":
+                plotdata = data[::skiptime, 0, ::skipchan]
+            elif datatype == "YY":
+                plotdata = data[::skiptime, 1, ::skipchan]
+            elif datatype == "Re(XY)":
+                plotdata = data[::skiptime, 2, ::skipchan]
+            elif datatype == "Im(XY)":
+                plotdata = data[::skiptime, 3, ::skipchan]
+            else:
+                raise ValueError(f"Invalid datatype: {datatype}")
+            plotflags = flag[::skiptime, ::skipchan]
 
             if not plotcal:
                 # remove cal
