@@ -1,6 +1,8 @@
 # jag-pipeline
 DRAO JAG Data Reduction Pipeline
 
+**This is a work in progress!**
+
 ## Installation
 ```bash
 $ pip install --upgrade git+https://github.com/tvwenger/jag-pipeline.git
@@ -41,4 +43,5 @@ You probably want to run the pipeline scripts in this order. Be sure to run each
 first so you can configure them to your needs.
 
 * `jagpipe-combine` to combine multiple SDHDF files into one, and optionally bin in time and/or frequency.
-* `jagpipe-flag` to automatically flag interference along the frequency axis
+* `jagpipe-flag` to automatically flag interference along the frequency axis.
+* `jagpipe-waterfall` to generate a waterfall figure for a SDHDF dataset.
