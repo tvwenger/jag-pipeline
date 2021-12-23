@@ -291,7 +291,11 @@ def main():
     )
     args = parser.parse_args()
     flagchan(
-        args.datafile, window=args.window, verbose=args.verbose,
+        args.datafile,
+        timebins=args.timebins,
+        window=args.window,
+        cutoff=args.cutoff,
+        verbose=args.verbose,
     )
 
 
