@@ -59,6 +59,9 @@ def combine(
     if os.path.exists(outfile):
         raise FileExistsError(f"Will not overwrite: {outfile}")
 
+    # sort datafiles
+    datafiles.sort()
+
     # DRAO position
     location = EarthLocation.from_geodetic(
         240.3810197222, 49.3210230556, height=546.566
