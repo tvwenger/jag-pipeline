@@ -23,6 +23,7 @@ setup(
             "jagpipe-flagchan=jagpipe.flagchan:main",
             "jagpipe-waterfall=jagpipe.waterfall:main",
             "jagpipe-reset=jagpipe.reset:main",
+            "jagpipe-setsource=jagpipe.setsource:main",
         ]
     },
 )

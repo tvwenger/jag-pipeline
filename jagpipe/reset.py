@@ -27,6 +27,8 @@ Trey Wenger - December 2021
 import argparse
 import h5py
 
+from . import __version__
+
 
 def reset(datafile):
     """
@@ -50,6 +52,9 @@ def main():
         description="Reset SDHDF cal and flag tables",
         prog="reset.py",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--version", action="version", version=__version__,
     )
     parser.add_argument(
         "datafile", type=str, help="SDHDF file",

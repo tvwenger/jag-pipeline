@@ -29,6 +29,8 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 
+from . import __version__
+
 
 def waterfall(
     datafile, prefix, skiptime=1, skipchan=1, plotcal=False, plotflagged=False,
@@ -124,6 +126,9 @@ def main():
         description="Generate waterfall figures from SDHDF file",
         prog="waterfall.py",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--version", action="version", version=__version__,
     )
     parser.add_argument(
         "datafile", type=str, help="SDHDF file",
