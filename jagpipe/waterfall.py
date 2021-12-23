@@ -80,7 +80,7 @@ def waterfall(
             plotdata = np.zeros((len(position), len(frequency)))
             plotflags = np.zeros((len(position), len(frequency)), dtype=bool)
             for i, idx in enumerate(range(0, data.shape[0], skiptime)):
-                print(i, end="\r")
+                print(idx, end="\r")
                 plotflags[i] = flag[i, ::skipchan]
                 if datatype == "XX":
                     plotdata[i] = data[idx, 0, ::skipchan]
