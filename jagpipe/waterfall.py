@@ -136,10 +136,10 @@ def main():
         "prefix", type=str, help="Output plot files prefix",
     )
     parser.add_argument(
-        "-t", "--skiptime", dtype=int, default=1, help="Plot every n-th integration"
+        "-t", "--skiptime", type=int, default=1, help="Plot every n-th integration"
     )
     parser.add_argument(
-        "-c", "--skipchan", dtype=int, default=1, help="Plot every n-th channel"
+        "-c", "--skipchan", type=int, default=1, help="Plot every n-th channel"
     )
     parser.add_argument(
         "--plotcal",
