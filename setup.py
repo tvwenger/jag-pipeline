@@ -24,6 +24,7 @@ setup(
             "jagpipe-waterfall=jagpipe.waterfall:main",
             "jagpipe-reset=jagpipe.reset:main",
             "jagpipe-setsource=jagpipe.setsource:main",
+            "jagpipe-findcal=jagpipe.findcal:main",
         ]
     },
 )

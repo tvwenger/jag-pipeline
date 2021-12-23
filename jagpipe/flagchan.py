@@ -38,8 +38,8 @@ _MAX_INT = np.iinfo(int).max
 
 def gradient_filter(data, delta):
     """
-    Use a first order finite differences filter to identify
-    narrow interference spikes.
+    Use a first and second order finite differences filter to
+    identify narrow interference spikes.
     N.B. Data must be positive definite
 
     Inputs:
@@ -57,6 +57,7 @@ def gradient_filter(data, delta):
     med_grad = np.nanmedian(grad)
     rms_grad = 1.4826 * np.nanmedian(np.abs(grad - med_grad))
     mask = np.abs(grad - med_grad) > 5.0 * rms_grad
+    # second order
     grad = (bar - 2.0 * data + foo) / data
     med_grad = np.nanmedian(grad)
     rms_grad = 1.4826 * np.nanmedian(np.abs(grad - med_grad))
@@ -260,6 +261,9 @@ def main():
         description="Automatically flag SDHDF along frequency axis",
         prog="flagchan.py",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--version", action="version", version=__version__,
     )
     parser.add_argument(
         "datafile", type=str, help="SDHDF file",
