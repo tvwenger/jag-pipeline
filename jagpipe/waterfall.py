@@ -136,6 +136,12 @@ def main():
         "prefix", type=str, help="Output plot files prefix",
     )
     parser.add_argument(
+        "-t", "--skiptime", dtype=int, default=1, help="Plot every n-th integration"
+    )
+    parser.add_argument(
+        "-c", "--skipchan", dtype=int, default=1, help="Plot every n-th channel"
+    )
+    parser.add_argument(
         "--plotcal",
         action="store_true",
         default=False,
@@ -146,7 +152,12 @@ def main():
     )
     args = parser.parse_args()
     waterfall(
-        args.datafile, args.prefix, plotcal=args.plotcal, plotflagged=args.plotflagged,
+        args.datafile,
+        args.prefix,
+        skiptime=args.skiptime,
+        skipchan=args.skipchan,
+        plotcal=args.plotcal,
+        plotflagged=args.plotflagged,
     )
 
 
