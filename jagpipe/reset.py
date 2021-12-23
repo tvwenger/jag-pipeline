@@ -40,12 +40,9 @@ def reset(datafile):
     """
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
-    with h5py.File(datafile, "r", rdcc_nbytes=cache_size) as sdhdf:
-        flag = sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["flag"]
-        cal = sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["cal"]
-
-        flag[:] = False
-        cal[:] = False
+    with h5py.File(datafile, "r+", rdcc_nbytes=cache_size) as sdhdf:
+        sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["flag"][:] = False
+        sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["cal"][:] = False
 
 
 def main():
