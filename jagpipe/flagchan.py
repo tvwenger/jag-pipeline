@@ -188,7 +188,7 @@ def generate_flag_mask(data, mask, window=101, cutoff=5.0):
 
 
 def flagchan(
-    datafile, timebins=[1], window=101, cutoff=5.0, verbose=False,
+    datafile, timebin=1, window=101, cutoff=5.0, verbose=False,
 ):
     """
     Read data file, apply flagging, save flag data.
@@ -196,11 +196,8 @@ def flagchan(
     Inputs:
         datafile :: string
             SDHDF file
-        timebins :: list of odd integers
-            Loop over these values, and flag data binned by these number
-            of integrations (i.e., with timebin=[1, 11] first flag entire
-            dataset with no time binning. Then go back and flag again, but
-            this time average 11 integrations before flagging.)
+        timebin :: odd integer
+            Average over this many integrations before flagging
         window :: integer
             Rolling window size along frequency axis
         cutoff :: scalar
@@ -210,9 +207,8 @@ def flagchan(
 
     Returns: Nothing
     """
-    for timebin in timebins:
-        if timebin % 2 == 0:
-            raise ValueError("timebins must be odd")
+    if timebin % 2 == 0:
+        raise ValueError("timebins must be odd")
     if window % 2 == 0:
         raise ValueError("window must be odd")
 
@@ -222,7 +218,7 @@ def flagchan(
         # initialize
         sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-VERSION"] = __version__
         sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-EXECTIME"] = Time.now().isot
-        sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-TIMEBINS"] = timebins
+        sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-TIMEBINS"] = timebin
         sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-WINDOW"] = window
         sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-CUTOFF"] = cutoff
 
@@ -230,37 +226,33 @@ def flagchan(
         data = sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["data"]
         flag = sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["flag"]
 
-        # Loop over timebins
-        for timebin in timebins:
+        # Loop over times
+        starttime = time.time()
+        for i in range(data.shape[0]):
             if verbose:
-                print(f"Averaging {timebin} integrations before flagging")
-            # Loop over times
-            starttime = time.time()
-            for i in range(data.shape[0]):
-                if verbose:
-                    if i % 10 == 0:
-                        runtime = time.time() - starttime
-                        timeper = runtime / (i + 1)
-                        remaining = timeper * (data.shape[0] - i)
-                        print(
-                            f"Flagging time: {i}/{data.shape[0]} "
-                            + f"ETA: {remaining:0.1f} s          ",
-                            end="\r",
-                        )
-                # get integration range
-                start = max(0, i - timebin // 2)
-                end = min(data.shape[0], i + timebin // 2 + 1)
-                # apply mask, update flag
-                dat = np.nanmean(data[start:end, :, :], axis=0)
-                mask = flag[i, :]
-                dat[np.repeat(mask[None, :], 4, axis=0)] = np.nan
-                flag[i, :] = generate_flag_mask(dat, mask, window=window, cutoff=cutoff)
-            if verbose:
-                runtime = time.time() - starttime
-                print(
-                    f"Flagging time: {data.shape[0]}/{data.shape[0]} "
-                    + f"Runtime: {runtime:.2f} s                     "
-                )
+                if i % 10 == 0:
+                    runtime = time.time() - starttime
+                    timeper = runtime / (i + 1)
+                    remaining = timeper * (data.shape[0] - i)
+                    print(
+                        f"Flagging time: {i}/{data.shape[0]} "
+                        + f"ETA: {remaining:0.1f} s          ",
+                        end="\r",
+                    )
+            # get integration range
+            start = max(0, i - timebin // 2)
+            end = min(data.shape[0], i + timebin // 2 + 1)
+            # apply mask, update flag
+            dat = np.nanmean(data[start:end, :, :], axis=0)
+            mask = flag[i, :]
+            dat[np.repeat(mask[None, :], 4, axis=0)] = np.nan
+            flag[i, :] = generate_flag_mask(dat, mask, window=window, cutoff=cutoff)
+        if verbose:
+            runtime = time.time() - starttime
+            print(
+                f"Flagging time: {data.shape[0]}/{data.shape[0]} "
+                + f"Runtime: {runtime:.2f} s                     "
+            )
 
 
 def main():
@@ -274,11 +266,10 @@ def main():
     )
     parser.add_argument(
         "-t",
-        "--timebins",
+        "--timebin",
         type=int,
-        nargs="+",
-        default=[1],
-        help="Average these number of integrations before flagging",
+        default=1,
+        help="Average this number of integrations before flagging",
     )
     parser.add_argument(
         "-w", "--window", type=int, default=101, help="Rolling channel window size",
