@@ -37,11 +37,7 @@ from .init_sdhdf import init_sdhdf
 
 
 def combine(
-    datafiles,
-    outfile,
-    chanbin=1,
-    timebin=1,
-    verbose=False,
+    datafiles, outfile, chanbin=1, timebin=1, verbose=False,
 ):
     """
     Read data files, apply binning, save to one output file.
@@ -64,14 +60,14 @@ def combine(
         raise FileExistsError(f"Will not overwrite: {outfile}")
 
     # DRAO position
-    location = EarthLocation.of_site("DRAO")
+    location = EarthLocation.from_geodetic(
+        240.3810197222, 49.3210230556, height=546.566
+    )
 
     # Read first datafile to get frequency axis and exposure time
     # Assume these do not change for the duratin of the observation
     with h5py.File(datafiles[0], "r") as inf:
-        exposure = (
-            timebin * inf["data"]["beam_0"]["band_SB4"].attrs["EXPOSURE"]
-        )
+        exposure = timebin * inf["data"]["beam_0"]["band_SB4"].attrs["EXPOSURE"]
         freqaxis = np.concatenate(
             [
                 inf["data"]["beam_0"][band]["frequency"][()]
@@ -90,9 +86,7 @@ def combine(
         # initialize
         init_sdhdf(outf, freqaxis, "Topocentric", exposure)
         metadata = outf["metadata"]
-        scan_position = outf["data"]["beam_0"]["band_SB0"]["scan_0"][
-            "position"
-        ]
+        scan_position = outf["data"]["beam_0"]["band_SB0"]["scan_0"]["position"]
         scan_flag = outf["data"]["beam_0"]["band_SB0"]["scan_0"]["flag"]
         scan_cal = outf["data"]["beam_0"]["band_SB0"]["scan_0"]["cal"]
         scan_data = outf["data"]["beam_0"]["band_SB0"]["scan_0"]["data"]
@@ -119,12 +113,10 @@ def combine(
                     axis=-1,
                 )
 
-                raw_time = inf["data"]["beam_0"]["band_SB4"]["scan_0"]["time"][
+                raw_time = inf["data"]["beam_0"]["band_SB4"]["scan_0"]["time"][()]
+                raw_position = inf["data"]["beam_0"]["band_SB4"]["scan_0"]["position"][
                     ()
                 ]
-                raw_position = inf["data"]["beam_0"]["band_SB4"]["scan_0"][
-                    "position"
-                ][()]
 
             # bin in frequency
             raw_data = np.mean(raw_data.reshape(-1, chanbin), axis=1).reshape(
@@ -149,10 +141,7 @@ def combine(
             while True:
                 # if there aren't enough time rows in the buffer, and if there
                 # is another datafile, then load the next data file
-                if (
-                    data_buffer.shape[0] < timebin
-                    and datai < len(datafiles) - 1
-                ):
+                if data_buffer.shape[0] < timebin and datai < len(datafiles) - 1:
                     break
 
                 # if we're out of rows, then we're done
@@ -167,9 +156,7 @@ def combine(
                 position = position_buffer[0]
                 data_buffer = np.delete(data_buffer, np.s_[0:timebin], axis=0)
                 time_buffer = np.delete(time_buffer, np.s_[0:timebin], axis=0)
-                position_buffer = np.delete(
-                    position_buffer, np.s_[0:timebin], axis=0
-                )
+                position_buffer = np.delete(position_buffer, np.s_[0:timebin], axis=0)
 
                 # Get position in ICRS
                 coord = SkyCoord(
@@ -217,40 +204,22 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--version",
-        action="version",
-        version=__version__,
+        "--version", action="version", version=__version__,
     )
     parser.add_argument(
-        "outfile",
-        type=str,
-        help="Output SDHDF file",
+        "outfile", type=str, help="Output SDHDF file",
     )
     parser.add_argument(
-        "datafiles",
-        type=str,
-        nargs="+",
-        help="Input SDHDF file(s)",
+        "datafiles", type=str, nargs="+", help="Input SDHDF file(s)",
     )
     parser.add_argument(
-        "-c",
-        "--chanbin",
-        type=int,
-        default=1,
-        help="Channel bin size",
+        "-c", "--chanbin", type=int, default=1, help="Channel bin size",
     )
     parser.add_argument(
-        "-t",
-        "--timebin",
-        type=int,
-        default=1,
-        help="Time bin size",
+        "-t", "--timebin", type=int, default=1, help="Time bin size",
     )
     parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Print verbose information",
+        "-v", "--verbose", action="store_true", help="Print verbose information",
     )
     args = parser.parse_args()
     combine(

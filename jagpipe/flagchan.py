@@ -81,9 +81,7 @@ def rolling_sum(data, window):
     if window % 2 == 0:
         raise ValueError("window must be odd")
     halfwin = (window - 1) // 2
-    newdata = np.concatenate(
-        [data[:halfwin][::-1], data, data[-halfwin:][::-1]]
-    )
+    newdata = np.concatenate([data[:halfwin][::-1], data, data[-halfwin:][::-1]])
     nansum = np.cumsum(~np.isnan(newdata))
     cumsum = np.nancumsum(newdata)
     foo = cumsum[window - 1 :] - np.concatenate([[0], cumsum[:-window]])
@@ -190,10 +188,7 @@ def generate_flag_mask(data, mask, window=101, cutoff=5.0):
 
 
 def flagchan(
-    datafile,
-    window=101,
-    cutoff=5.0,
-    verbose=False,
+    datafile, window=101, cutoff=5.0, verbose=False,
 ):
     """
     Read data file, apply flagging, save flag data.
@@ -215,9 +210,7 @@ def flagchan(
     with h5py.File(datafile, "r+", rdcc_nbytes=cache_size) as sdhdf:
         # initialize
         sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-VERSION"] = __version__
-        sdhdf["metadata"].attrs[
-            "JAG-PIPELINE-FLAGCHAN-EXECTIME"
-        ] = Time.now().isot
+        sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-EXECTIME"] = Time.now().isot
         sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-WINDOW"] = window
         sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-CUTOFF"] = cutoff
 
@@ -242,9 +235,7 @@ def flagchan(
             dat = data[i, :, :]
             mask = flag[i, :]
             dat[np.repeat(mask[None, :], 4, axis=0)] = np.nan
-            flag[i, :] = generate_flag_mask(
-                dat, mask, window=window, cutoff=cutoff
-            )
+            flag[i, :] = generate_flag_mask(dat, mask, window=window, cutoff=cutoff)
         if verbose:
             runtime = time.time() - start
             print(
@@ -260,28 +251,17 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "datafile",
-        type=str,
-        help="SDHDF file",
+        "datafile", type=str, help="SDHDF file",
     )
     parser.add_argument(
-        "-w",
-        "--window",
-        type=int,
-        default=101,
-        help="Rolling channel window size",
+        "-w", "--window", type=int, default=101, help="Rolling channel window size",
     )
     parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Print verbose information",
+        "-v", "--verbose", action="store_true", help="Print verbose information",
     )
     args = parser.parse_args()
     flagchan(
-        args.datafile,
-        window=args.window,
-        verbose=args.verbose,
+        args.datafile, window=args.window, verbose=args.verbose,
     )
 
 

@@ -86,9 +86,7 @@ def init_sdhdf(sdhdf, freqaxis, freqframe, exposure):
 
     # Data - Beam 0 - Band SB0 - Polarization
     polarization_data = np.array(["XX", "YY", "Re(XY)", "Im(XY)"], dtype="S")
-    polarization = band_sb0.create_dataset(
-        "polarization", data=polarization_data
-    )
+    polarization = band_sb0.create_dataset("polarization", data=polarization_data)
     polarization.attrs["NAME"] = "polarization"
     polarization.attrs["DESCRIPTION"] = "Polarization types"
 
@@ -112,9 +110,7 @@ def init_sdhdf(sdhdf, freqaxis, freqframe, exposure):
         ],
     )
     scan_position = scan.create_dataset(
-        "position",
-        data=position_data,
-        maxshape=(None,),
+        "position", data=position_data, maxshape=(None,),
     )
     scan_position.attrs["NAME"] = "position"
     scan_position.attrs["DESCRIPTION"] = "Position at start of integration"
@@ -148,10 +144,7 @@ def init_sdhdf(sdhdf, freqaxis, freqframe, exposure):
     data = np.empty((0, 4, len(freqaxis)), dtype=float)
 
     scan_data = scan.create_dataset(
-        "data",
-        data=data,
-        maxshape=(None, 4, len(freqaxis)),
-        chunks=chunks,
+        "data", data=data, maxshape=(None, 4, len(freqaxis)), chunks=chunks,
     )
     scan_data.attrs["NAME"] = "data"
     scan_data.attrs["DESCRIPTION"] = "Data"
@@ -163,10 +156,7 @@ def init_sdhdf(sdhdf, freqaxis, freqframe, exposure):
     data = np.empty((0, len(freqaxis)), dtype=bool)
     chunks = (chunk_time, chunk_freq)
     scan_flag = scan.create_dataset(
-        "flag",
-        data=data,
-        maxshape=(None, len(freqaxis)),
-        chunks=chunks,
+        "flag", data=data, maxshape=(None, len(freqaxis)), chunks=chunks,
     )
     scan_flag.attrs["NAME"] = "flag"
     scan_flag.attrs["DESCRIPTION"] = "Flag"
@@ -174,11 +164,7 @@ def init_sdhdf(sdhdf, freqaxis, freqframe, exposure):
 
     # Cal mask storage
     data = np.empty((0), dtype=bool)
-    scan_cal = scan.create_dataset(
-        "cal",
-        data=data,
-        maxshape=(None,),
-    )
+    scan_cal = scan.create_dataset("cal", data=data, maxshape=(None,),)
     scan_cal.attrs["NAME"] = "cal"
     scan_cal.attrs["DESCRIPTION"] = "Cal"
     scan_cal.attrs["DIMENSION_LABELS"] = ["time"]
