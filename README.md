@@ -62,5 +62,6 @@ Also:
 
 ## TODO
 * Implement HISTORY as appendable dataset in the metadata group
+* Merge splitscan and setsource into combine
 * Deal with scans properly once implemented by JAG filler
 * Get rid of `setsource.py` once implemented by JAG filler
