@@ -50,16 +50,24 @@ def flagbackup(datafile, backupfile):
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
     with h5py.File(datafile, "r", rdcc_nbytes=cache_size) as sdhdf:
-        flag = sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["flag"]
-
         with h5py.File(backupfile, "w") as backuphdf:
-            data = np.empty((0, flag.shape[1]), dtype=bool)
-            flagbackup = backuphdf.create_dataset(
-                "flagbackup", data=data, maxshape=(None, flag.shape[1])
-            )
-            for i in range(flag.shape[0]):
-                flagbackup.resize(flagbackup.shape[0] + 1, axis=0)
-                flagbackup[-1] = flag[i]
+            # Loop over scans
+            scans = [
+                key
+                for key in sdhdf["data"]["beam_0"]["band_SB0"].keys()
+                if "scan" in key
+            ]
+            for scan in scans:
+                if "scan" not in scan:
+                    continue
+                flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
+                data = np.empty((0, flag.shape[1]), dtype=bool)
+                flagbackup = backuphdf.create_dataset(
+                    scan, data=data, maxshape=(None, flag.shape[1])
+                )
+                for i in range(flag.shape[0]):
+                    flagbackup.resize(flagbackup.shape[0] + 1, axis=0)
+                    flagbackup[-1] = flag[i]
 
 
 def main():
