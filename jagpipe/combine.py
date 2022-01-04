@@ -5,7 +5,7 @@ assign sources based on telescope position, add "cal" and "flag"
 tables, remove off-source integrations, break observation into
 scans based on position, and output a single SDHDF file.
 
-Copyright(C) 2021 by
+Copyright(C) 2021-2022 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)
@@ -24,7 +24,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Changelog:
-Trey Wenger - December 2021
+Trey Wenger - January 2022
 """
 
 import os
@@ -142,6 +142,7 @@ def init_scan(band, scan_num, source, source_coord, num_freq, chunks=None):
 def combine(
     datafiles,
     outfile,
+    exposure=None,
     chanbin=1,
     timebin=1,
     sourcefile="sources.txt",
@@ -164,6 +165,8 @@ def combine(
             Input SDHDF datafiles
         outfile :: string
             Output SDHDF datafile
+        exposure :: float (seconds)
+            Overwrite exposure to this value
         chanbin :: integer
             Number of channels to bin
         timebin :: integer
@@ -199,7 +202,8 @@ def combine(
     # Read first datafile to get frequency axis and exposure time
     # Assume these do not change for the duratin of the observation
     with h5py.File(datafiles[0], "r") as inf:
-        exposure = timebin * inf["data"]["beam_0"]["band_SB4"].attrs["EXPOSURE"]
+        if exposure is None:
+            exposure = timebin * inf["data"]["beam_0"]["band_SB4"].attrs["EXPOSURE"]
         freqaxis = np.concatenate(
             [
                 inf["data"]["beam_0"][band]["frequency"][()]
@@ -443,6 +447,12 @@ def main():
         "datafiles", type=str, nargs="+", help="Input SDHDF file(s)",
     )
     parser.add_argument(
+        "--exposure",
+        type=float,
+        default=None,
+        help="Overwrite output exposure to this value",
+    )
+    parser.add_argument(
         "-c", "--chanbin", type=int, default=1, help="Channel bin size",
     )
     parser.add_argument(
@@ -477,6 +487,7 @@ def main():
     combine(
         args.datafiles,
         args.outfile,
+        exposure=args.exposure,
         chanbin=args.chanbin,
         timebin=args.timebin,
         sourcefile=args.sourcefile,

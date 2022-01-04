@@ -34,13 +34,7 @@ from . import __version__
 
 
 def waterfall(
-    datafile,
-    prefix,
-    scans=None,
-    chanbin=None,
-    timebin=None,
-    showcal=False,
-    plotflagged=False,
+    datafile, prefix, scans=None, chanbin=None, showcal=False, plotflagged=False,
 ):
     """
     Generate waterfall figure from a given SDHDF datafile.
@@ -55,9 +49,6 @@ def waterfall(
         chanbin :: integer
             Number of channels to bin. If None, set so that there are
             ~4,000 channel bins across the display range.
-        timebin :: integer
-            Number of integrations to bin. If None, set so that there
-            are ~8,000 integration bins across the display range.
         showcal :: boolean
             If True, highlight cal-on integrations
         plotflagged :: boolean
@@ -97,32 +88,41 @@ def waterfall(
                 data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
                 flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
                 metadata = sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"]
+                scantimes = metadata["MJD"] * 24.0 * 3600.0
                 num_int = data.shape[0]
+
+                # plot extent
+                start_mjd = scantimes[0]
+                start_time = scantimes[0] - start_mjd
+                end_time = scantimes[-1] - start_mjd + exposure
+                chanwidth = frequency[1] - frequency[0]
+                start_freq = (frequency[0] - chanwidth / 2.0) / 1e6
+                end_freq = (frequency[-1] + chanwidth / 2.0) / 1e6
+                scan_duration = end_time - start_time
+                extent = [start_freq, end_freq, end_time, start_time]
 
                 # Set default values for bins if necessary
                 if chanbin is None:
                     chanbin = max(1, int(len(frequency) / 4000))
                     print(f"chanbin: {chanbin}")
-                if timebin is None:
-                    timebin = max(1, int(num_int / 4000))
-                    print(f"timebin: {timebin}")
 
                 # Storage for plot data
                 plot_num_freq = int(np.ceil(len(frequency) / chanbin))
-                plot_num_int = int(np.ceil(data.shape[0] / timebin))
-                plotdata = np.empty((plot_num_int, plot_num_freq), dtype=float)
+                plot_num_int = int(np.round(scan_duration / exposure))
+                plottimes = np.arange(plot_num_int) * exposure
+                plotdata = np.ones((plot_num_int, plot_num_freq)) * np.nan
 
-                # bin in frequency and time
-                buffer_idx = 0
-                bin_idx = 0
-                data_buffer = np.ones((timebin, plot_num_freq), dtype=float) * np.nan
-                for i in range(data.shape[0]):
+                for i in range(num_int):
                     if i % 10 == 0:
                         print(
                             f"Scan {scani}/{len(scans)}     "
                             + f"Integration {i}/{num_int}   ",
                             end="\r",
                         )
+
+                    # get closest plot index for this integration
+                    ploti = np.argmin(np.abs(scantimes[i] - start_mjd - plottimes))
+
                     # bin in frequency
                     dat = data[i, corr_idx, :]
                     if not plotflagged:
@@ -132,24 +132,7 @@ def waterfall(
                         pad = chanbin - pad
                     dat = np.pad(dat, (0, pad), mode="constant", constant_values=np.nan)
                     dat = np.nanmean(dat.reshape(-1, chanbin), axis=1)
-                    data_buffer[buffer_idx] = dat
-                    buffer_idx += 1
-
-                    # bin in time, save
-                    if (i == data.shape[0] - 1) or buffer_idx == timebin:
-                        plotdata[bin_idx] = np.nanmean(
-                            data_buffer[0:buffer_idx], axis=0
-                        )
-                        buffer_idx = 0
-                        bin_idx += 1
-
-                # plot extent
-                start_mjd = metadata["MJD"][0]
-                start_time = (metadata["MJD"][0] - start_mjd) * 24.0 * 3600.0
-                end_time = (metadata["MJD"][-1] - start_mjd) * 24.0 * 3600.0 + exposure
-                start_freq = frequency[0] / 1e6
-                end_freq = frequency[-1] / 1e6
-                extent = [start_freq, end_freq, end_time, start_time]
+                    plotdata[ploti] = dat
 
                 # Generate figure
                 fig, ax = plt.subplots(figsize=(12, 12),)
@@ -169,15 +152,15 @@ def waterfall(
                     freq_width = 0.01 * (end_freq - start_freq)
                     first_int = None
                     last_int = None
-                    for row in metadata:
+                    for row, scantime in zip(metadata, scantimes):
                         if first_int is None and row["CAL"]:
-                            first_int = (row["MJD"] - start_mjd) * 24.0 * 3600.0
+                            first_int = scantime - start_mjd
                         elif (
                             first_int is not None
                             and last_int is None
                             and (not row["CAL"] or row == metadata[-1])
                         ):
-                            last_int = (row["MJD"] - start_mjd) * 24.0 * 3600.0
+                            last_int = scantime - start_mjd
                             # plot
                             rect = Rectangle(
                                 (start_freq, first_int),
@@ -247,13 +230,6 @@ def main():
         help="Channel bin size. Default: 5000 bins across image",
     )
     parser.add_argument(
-        "-t",
-        "--timebin",
-        type=int,
-        default=None,
-        help="Time bin size. Default: 5000 bins across image",
-    )
-    parser.add_argument(
         "--showcal",
         action="store_true",
         default=False,
@@ -268,7 +244,6 @@ def main():
         args.prefix,
         scans=args.scans,
         chanbin=args.chanbin,
-        timebin=args.timebin,
         showcal=args.showcal,
         plotflagged=args.plotflagged,
     )
