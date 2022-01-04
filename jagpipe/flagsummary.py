@@ -1,8 +1,8 @@
 """
-reset.py
-Reset the cal and flag tables of a SDHDF data file.
+flagsummary.py
+Print flag summary.
 
-Copyright(C) 2021 by
+Copyright(C) 2021-2022 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)
@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Changelog:
-Trey Wenger - December 2021
+Trey Wenger - January 2022
 """
 
 import argparse
@@ -29,12 +29,11 @@ import h5py
 import numpy as np
 
 from . import __version__
-from .utils import add_history
 
 
-def reset(datafile):
+def flagsummary(datafile):
     """
-    Reset the cal state and flag tables of a SDHDF data file to False.
+    Print summary of flags.
 
     Inputs:
         datafile :: string
@@ -44,25 +43,34 @@ def reset(datafile):
     """
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
-    with h5py.File(datafile, "r+", rdcc_nbytes=cache_size) as sdhdf:
-        # add history items
-        add_history(sdhdf, f"JAG-PIPELINE-RESET VERSION: {__version__}")
-
+    num_data = 0
+    num_flagged = 0
+    with h5py.File(datafile, "r", rdcc_nbytes=cache_size) as sdhdf:
         # Loop over scans
         scans = [
             key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
         ]
         for scan in scans:
-            sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"][:] = False
-            metadata = np.copy(sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"])
-            metadata["CAL"][:] = False
-            sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"][:] = metadata
+            scan_data = 0
+            scan_flagged = 0
+            flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
+            for i in range(flag.shape[0]):
+                scan_data += flag[i].size
+                scan_flagged += np.sum(flag[i])
+            print(
+                f"{scan}: {scan_flagged}/{scan_data} ({100.0*scan_flagged/scan_data:0.2f}%) flagged"
+            )
+            num_data += scan_data
+            num_flagged += scan_flagged
+        print(
+            f"Total: {num_flagged}/{num_data} ({100.0*num_flagged/num_data:0.2f}%) flagged"
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Reset SDHDF cal and flag tables",
-        prog="reset.py",
+        description="Print flag summary",
+        prog="flagsummary.py",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -72,7 +80,7 @@ def main():
         "datafile", type=str, help="SDHDF file",
     )
     args = parser.parse_args()
-    reset(args.datafile)
+    flagsummary(args.datafile)
 
 
 if __name__ == "__main__":

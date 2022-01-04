@@ -26,12 +26,12 @@ Trey Wenger - December 2021
 """
 
 import argparse
-from astropy.time import Time
 import h5py
 import numpy as np
 import time
 
 from . import __version__
+from .utils import add_history
 
 _MAX_INT = np.iinfo(int).max
 
@@ -216,42 +216,71 @@ def flagchan(
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
     with h5py.File(datafile, "r+", rdcc_nbytes=cache_size) as sdhdf:
-        # initialize
-        sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-VERSION"] = __version__
-        sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-EXECTIME"] = Time.now().isot
-        sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-TIMEBINS"] = timebin
-        sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-WINDOW"] = window
-        sdhdf["metadata"].attrs["JAG-PIPELINE-FLAGCHAN-CUTOFF"] = cutoff
+        # add history items
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN VERSION: {__version__}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN TIMEBIN: {timebin}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN WINDOW: {window}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN CUTOFF: {cutoff}")
 
-        # get data and mask
-        data = sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["data"]
-        flag = sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["flag"]
+        # get total number of integrations
+        num_int = 0
+        complete = 0
+        scans = [
+            key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
+        ]
+        for scan in scans:
+            num_int += sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"].shape[0]
 
-        # Loop over times
+        # Loop over scans
         starttime = time.time()
-        for i in range(data.shape[0]):
-            if verbose:
-                if i % 10 == 0:
+        for scan in scans:
+            # get data and mask
+            data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
+            flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
+
+            # storage for data, flag
+            data_buffer = np.ones((data.shape[1], data.shape[2]), dtype=float)
+            isnan_buffer = np.zeros((timebin, data.shape[1], data.shape[2]), dtype=bool)
+            index_buffer = np.ones(timebin, dtype=int) * -1
+
+            # loop over integrations
+            for i in range(data.shape[0]):
+                if verbose and (complete % 10 == 0):
                     runtime = time.time() - starttime
-                    timeper = runtime / (i + 1)
-                    remaining = timeper * (data.shape[0] - i)
+                    timeper = runtime / (complete + 1)
+                    remaining = timeper * (num_int - complete)
                     print(
-                        f"Flagging time: {i}/{data.shape[0]} "
+                        f"Flagging integration: {complete}/{num_int} "
                         + f"ETA: {remaining:0.1f} s          ",
                         end="\r",
                     )
-            # get integration range
-            start = max(0, i - timebin // 2)
-            end = min(data.shape[0], i + timebin // 2 + 1)
-            # apply mask, update flag
-            dat = np.nanmean(data[start:end, :, :], axis=0)
-            mask = flag[i, :]
-            dat[np.repeat(mask[None, :], 4, axis=0)] = np.nan
-            flag[i, :] = generate_flag_mask(dat, mask, window=window, cutoff=cutoff)
+                # get integration range
+                start = max(0, i - timebin // 2)
+                end = min(data.shape[0], i + timebin // 2 + 1)
+                # remove old integrations from buffer
+                bad = np.where(index_buffer < start)[0]
+                index_buffer[bad] = -1
+                # add new integrations to buffer
+                for idx in range(start, end):
+                    if idx not in index_buffer:
+                        first_empty = np.where(index_buffer == -1)[0][0]
+                        data_buffer = np.nansum([data_buffer, data[idx, :, :]], axis=0)
+                        isnan_buffer[first_empty] = np.isnan(data[idx, :, :])
+                        index_buffer[first_empty] = idx
+                # Calculate mean in buffer
+                good = np.where(index_buffer != -1)[0]
+                count_notnan = np.sum(~isnan_buffer[good], axis=0)
+                count_notnan[count_notnan == 0] = _MAX_INT
+                dat = data_buffer / count_notnan
+                # apply mask, update flag
+                mask = flag[i, :]
+                dat[np.repeat(mask[None, :], 4, axis=0)] = np.nan
+                flag[i, :] = generate_flag_mask(dat, mask, window=window, cutoff=cutoff)
+                complete += 1
         if verbose:
             runtime = time.time() - starttime
             print(
-                f"Flagging time: {data.shape[0]}/{data.shape[0]} "
+                f"Flagging integration: {complete}/{num_int} "
                 + f"Runtime: {runtime:.2f} s                     "
             )
 
