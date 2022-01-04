@@ -77,20 +77,32 @@ def findcal(
             metadata = np.copy(sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"])
             data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
             flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
-
-            # get exposure
             exposure = sdhdf["data"]["beam_0"]["band_SB0"].attrs["EXPOSURE"]
+
+            # get integration timestamps in seconds
+            scantimes = metadata["MJD"] * 24.0 * 3600.0
+
+            # fill time gaps with NaN
+            start_time = scantimes[0]
+            end_time = scantimes[-1] + exposure
+            scan_duration = end_time - start_time
+            plot_num_int = int(np.round(scan_duration / exposure))
+            times = np.arange(plot_num_int) * exposure
+            time_series = np.ones_like(times) * np.nan
+            has_data = np.zeros_like(times, dtype=bool)
 
             # Median over range of channels
             if verbose:
                 print("Reading data...")
-            time_series = np.ones(data.shape[0]) * np.nan
             for i in range(data.shape[0]):
                 print(i, end="\r")
+                # get closest time
+                timei = np.argmin(np.abs(scantimes[i] - start_time - times))
+                has_data[timei] = True
                 total_power = data[i, 0, start:end] + data[i, 1, start:end]
                 total_power[flag[i, start:end]] = np.nan
                 if not np.all(np.isnan(total_power)):
-                    time_series[i] = np.nanmedian(total_power)
+                    time_series[timei] = np.nanmedian(total_power)
 
             # Rolling mean over cal duration (increase SNR)
             if verbose:
@@ -152,11 +164,11 @@ def findcal(
             if verbose:
                 print("Saving cal and flag mask...")
             for i in range(data.shape[0]):
-                if trans[i]:
+                if trans[has_data][i]:
                     flag[i, :] = True
 
             # save cal state
-            metadata["CAL"] = mask
+            metadata["CAL"] = mask[has_data]
             sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"][:] = metadata
 
 
