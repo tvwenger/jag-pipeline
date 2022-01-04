@@ -26,13 +26,15 @@ Trey Wenger - December 2021
 
 import argparse
 import h5py
+import numpy as np
 
 from . import __version__
+from .utils import add_history
 
 
 def reset(datafile):
     """
-    Reset the cal and flag tables of a SDHDF data file to False.
+    Reset the cal state and flag tables of a SDHDF data file to False.
 
     Inputs:
         datafile :: string
@@ -43,8 +45,18 @@ def reset(datafile):
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
     with h5py.File(datafile, "r+", rdcc_nbytes=cache_size) as sdhdf:
-        sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["flag"][:] = False
-        sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["cal"][:] = False
+        # add history items
+        add_history(sdhdf, f"JAG-PIPELINE-RESET VERSION: {__version__}")
+
+        # Loop over scans
+        scans = [
+            key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
+        ]
+        for scan in scans:
+            sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"][:] = False
+            metadata = np.copy(sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"])
+            metadata["CAL"][:] = False
+            sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"][:] = metadata
 
 
 def main():

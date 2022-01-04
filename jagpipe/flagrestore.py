@@ -28,6 +28,7 @@ import argparse
 import h5py
 
 from . import __version__
+from .utils import add_history
 
 
 def flagrestore(datafile, backupfile):
@@ -45,16 +46,24 @@ def flagrestore(datafile, backupfile):
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
     with h5py.File(datafile, "r+", rdcc_nbytes=cache_size) as sdhdf:
-        flag = sdhdf["data"]["beam_0"]["band_SB0"]["scan_0"]["flag"]
+        # add history items
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGRESTORE VERSION: {__version__}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGRESTORE BACKUPFILE: {backupfile}")
 
+        # Loop over scans
+        scans = [
+            key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
+        ]
         with h5py.File(backupfile, "r") as backuphdf:
-            flagbackup = backuphdf["flagbackup"]
+            for scan in scans:
+                flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
+                flagbackup = backuphdf[scan]
 
-            if flag.shape != flagbackup.shape:
-                raise ValueError("Conflicting flag table shapes!")
+                if flag.shape != flagbackup.shape:
+                    raise ValueError("Conflicting flag table shapes!")
 
-            for i in range(flag.shape[0]):
-                flag[i, :] = flagbackup[i, :]
+                for i in range(flag.shape[0]):
+                    flag[i, :] = flagbackup[i, :]
 
 
 def main():
