@@ -431,7 +431,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Combine and bin JAG datafiles",
         prog="combine.py",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        formatter_class=SmartFormatter,
     )
     parser.add_argument(
         "--version", action="version", version=__version__,

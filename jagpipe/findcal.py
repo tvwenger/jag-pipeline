@@ -36,7 +36,7 @@ from .flagchan import rolling_mean
 
 
 def findcal(
-    datafile, start=1, end=-1, duration=30.0, period=60.0, verbose=False,
+    datafile, start=0, end=-1, duration=30.0, period=60.0, verbose=False,
 ):
     """
     Identify calibration integrations in SDHDF file and
@@ -131,17 +131,22 @@ def findcal(
             # identify peaks
             idx = argrelmax(dat)[0]
 
-            # generate mask
+            # generate calibration mask
+            # flag first and last integration of each mask, as well one before
+            # and one after, to catch off->on and on->off transitions
+            trans = np.zeros_like(time_series, dtype=bool)
             mask = np.zeros_like(time_series, dtype=bool)
             for i in idx:
                 st = max(0, i - duration_window // 2)
                 en = min(len(mask), i + duration_window // 2 + 1)
                 mask[st:en] = True
-
-            # expand mask by one integration adjacent to each masked integration
-            # to catch off->on and on->off transitions
-            trans = np.roll(mask, -1) | np.roll(mask, +1)
-            trans = trans & ~mask
+                # set flags
+                trans[st] = True
+                trans[en - 1] = True
+                if st > 0:
+                    trans[st - 1] = True
+                if en < len(mask):
+                    trans[en] = True
 
             # flag cal transitions
             if verbose:

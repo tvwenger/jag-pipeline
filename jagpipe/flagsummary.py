@@ -1,8 +1,8 @@
 """
-flagbackup.py
-Backup the flag table to an external file.
+flagsummary.py
+Print flag summary.
 
-Copyright(C) 2021 by
+Copyright(C) 2021-2022 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)
@@ -21,10 +21,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Changelog:
-Trey Wenger - December 2021
+Trey Wenger - January 2022
 """
 
-import os
 import argparse
 import h5py
 import numpy as np
@@ -32,46 +31,46 @@ import numpy as np
 from . import __version__
 
 
-def flagbackup(datafile, backupfile):
+def flagsummary(datafile):
     """
-    Save the flag table to an external hd5 file.
+    Print summary of flags.
 
     Inputs:
         datafile :: string
             SDHDF filename
-        backupfile :: string
-            Flag backup filename
 
     Returns: Nothing
     """
-    if os.path.exists(backupfile):
-        raise FileExistsError(f"Will not overwrite {backupfile}")
-
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
+    num_data = 0
+    num_flagged = 0
     with h5py.File(datafile, "r", rdcc_nbytes=cache_size) as sdhdf:
-        with h5py.File(backupfile, "w") as backuphdf:
-            # Loop over scans
-            scans = [
-                key
-                for key in sdhdf["data"]["beam_0"]["band_SB0"].keys()
-                if "scan" in key
-            ]
-            for scan in scans:
-                flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
-                data = np.empty((0, flag.shape[1]), dtype=bool)
-                flagbackup = backuphdf.create_dataset(
-                    scan, data=data, maxshape=(None, flag.shape[1])
-                )
-                for i in range(flag.shape[0]):
-                    flagbackup.resize(flagbackup.shape[0] + 1, axis=0)
-                    flagbackup[-1] = flag[i]
+        # Loop over scans
+        scans = [
+            key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
+        ]
+        for scan in scans:
+            scan_data = 0
+            scan_flagged = 0
+            flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
+            for i in range(flag.shape[0]):
+                scan_data += flag[i].size
+                scan_flagged += np.sum(flag[i])
+            print(
+                f"{scan}: {scan_flagged}/{scan_data} ({100.0*scan_flagged/scan_data:0.2f}%) flagged"
+            )
+            num_data += scan_data
+            num_flagged += scan_flagged
+        print(
+            f"Total: {num_flagged}/{num_data} ({100.0*num_flagged/num_data:0.2f}%) flagged"
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Save the flag table to an external hd5 file.",
-        prog="flagbackup.py",
+        description="Print flag summary",
+        prog="flagsummary.py",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -80,11 +79,8 @@ def main():
     parser.add_argument(
         "datafile", type=str, help="SDHDF file",
     )
-    parser.add_argument(
-        "backupfile", type=str, help="Flag backup HDF file",
-    )
     args = parser.parse_args()
-    flagbackup(args.datafile, args.backupfile)
+    flagsummary(args.datafile)
 
 
 if __name__ == "__main__":

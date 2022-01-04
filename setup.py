@@ -27,6 +27,7 @@ setup(
             "jagpipe-findcal=jagpipe.findcal:main",
             "jagpipe-flagbackup=jagpipe.flagbackup:main",
             "jagpipe-flagrestore=jagpipe.flagrestore:main",
+            "jagpipe-flagsummary=jagpipe.flagsummary:main",
         ]
     },
 )

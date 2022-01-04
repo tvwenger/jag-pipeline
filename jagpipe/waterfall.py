@@ -28,6 +28,7 @@ import argparse
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch, Rectangle
 
 from . import __version__
 
@@ -38,7 +39,7 @@ def waterfall(
     scans=None,
     chanbin=None,
     timebin=None,
-    plotcal=False,
+    showcal=False,
     plotflagged=False,
 ):
     """
@@ -57,8 +58,8 @@ def waterfall(
         timebin :: integer
             Number of integrations to bin. If None, set so that there
             are ~8,000 integration bins across the display range.
-        plotcal :: boolean
-            If True, plot cal-on integrations
+        showcal :: boolean
+            If True, highlight cal-on integrations
         plotflagged :: boolean
             If True, plot flagged data
 
@@ -92,6 +93,7 @@ def waterfall(
         for corr_idx, datatype, label in zip(corr_idxs, datatypes, labels):
             for scani, scan in enumerate(scans):
                 # get data
+                exposure = sdhdf["data"]["beam_0"]["band_SB0"].attrs["EXPOSURE"]
                 data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
                 flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
                 metadata = sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"]
@@ -125,8 +127,6 @@ def waterfall(
                     dat = data[i, corr_idx, :]
                     if not plotflagged:
                         dat[flag[i]] = np.nan
-                    if not plotcal and metadata["CAL"][i]:
-                        dat[:] = np.nan
                     pad = len(dat) % chanbin
                     if pad != 0:
                         pad = chanbin - pad
@@ -146,7 +146,7 @@ def waterfall(
                 # plot extent
                 start_mjd = metadata["MJD"][0]
                 start_time = (metadata["MJD"][0] - start_mjd) * 24.0 * 3600.0
-                end_time = (metadata["MJD"][-1] - start_mjd) * 24.0 * 3600.0
+                end_time = (metadata["MJD"][-1] - start_mjd) * 24.0 * 3600.0 + exposure
                 start_freq = frequency[0] / 1e6
                 end_freq = frequency[-1] / 1e6
                 extent = [start_freq, end_freq, end_time, start_time]
@@ -163,9 +163,53 @@ def waterfall(
                     vmax=vmax,
                 )
                 fig.colorbar(cax, ax=ax, label="Relative Power")
+
+                # highligh cal-on integrations
+                if showcal:
+                    freq_width = 0.01 * (end_freq - start_freq)
+                    first_int = None
+                    last_int = None
+                    for row in metadata:
+                        if first_int is None and row["CAL"]:
+                            first_int = (row["MJD"] - start_mjd) * 24.0 * 3600.0
+                        elif (
+                            first_int is not None
+                            and last_int is None
+                            and (not row["CAL"] or row == metadata[-1])
+                        ):
+                            last_int = (row["MJD"] - start_mjd) * 24.0 * 3600.0
+                            # plot
+                            rect = Rectangle(
+                                (start_freq, first_int),
+                                freq_width,
+                                (last_int - first_int),
+                                linewidth=0,
+                                fill=True,
+                                color="red",
+                            )
+                            ax.add_patch(rect)
+                            rect = Rectangle(
+                                (end_freq - freq_width, first_int),
+                                freq_width,
+                                (last_int - first_int),
+                                linewidth=0,
+                                fill=True,
+                                color="red",
+                            )
+                            ax.add_patch(rect)
+                            first_int = None
+                            last_int = None
+                    red_patch = Patch(color="red", label="CAL ON")
+                    ax.legend(loc="upper left", handles=[red_patch])
+
+                # labels and save
                 ax.set_xlabel(f"{freqframe} Frequency (MHz)")
                 ax.set_ylabel(f"Seconds Since MJD = {start_mjd:.6f}")
-                ax.set_title(f"{datafile} {scan} {datatype}")
+                ax.set_title(
+                    "{0} {1} {2}".format(
+                        datafile.replace("_", r"\_"), scan.replace("_", r"\_"), datatype
+                    )
+                )
                 fig.tight_layout()
                 fname = f"{prefix}_{scan}_{label}.png"
                 fig.savefig(fname, dpi=300, bbox_inches="tight")
@@ -210,10 +254,10 @@ def main():
         help="Time bin size. Default: 5000 bins across image",
     )
     parser.add_argument(
-        "--plotcal",
+        "--showcal",
         action="store_true",
         default=False,
-        help="Plot cal-on integrations",
+        help="Highlight cal-on integrations",
     )
     parser.add_argument(
         "--plotflagged", action="store_true", default=False, help="Plot flagged data",
@@ -225,7 +269,7 @@ def main():
         scans=args.scans,
         chanbin=args.chanbin,
         timebin=args.timebin,
-        plotcal=args.plotcal,
+        showcal=args.showcal,
         plotflagged=args.plotflagged,
     )
 
