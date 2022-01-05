@@ -50,6 +50,7 @@ def flagsummary(datafile):
         scans = [
             key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
         ]
+        scans = sorted(scans, key=lambda scan: int(scan[6:]))
         for scan in scans:
             scan_data = 0
             scan_flagged = 0

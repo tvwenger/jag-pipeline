@@ -72,57 +72,60 @@ def waterfall(
                 for scan in scans
                 if f"scan_{scan}" in sdhdf["data"]["beam_0"]["band_SB0"].keys()
             ]
+        scans = sorted(scans, key=lambda scan: int(scan[6:]))
 
         # Get size of frequency and integration axes
         frequency = sdhdf["data"]["beam_0"]["band_SB0"]["frequency"][()]
         freqframe = sdhdf["data"]["beam_0"]["band_SB0"]["frequency"].attrs["FRAME"]
 
+        # Set default values for bins if necessary
+        if chanbin is None:
+            chanbin = max(1, int(len(frequency) / 4000))
+            print(f"chanbin: {chanbin}")
+
+        # Correlations
         corr_idxs = [0, 1, 2, 3]
         datatypes = ["XX", "YY", "Re(XY)", "Im(XY)"]
         labels = ["XX", "YY", "ReXY", "ImXY"]
 
-        for corr_idx, datatype, label in zip(corr_idxs, datatypes, labels):
-            for scani, scan in enumerate(scans):
-                # get data
-                exposure = sdhdf["data"]["beam_0"]["band_SB0"].attrs["EXPOSURE"]
-                data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
-                flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
-                metadata = sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"]
-                scantimes = metadata["MJD"] * 24.0 * 3600.0
-                num_int = data.shape[0]
+        for scani, scan in enumerate(scans):
+            # get data
+            exposure = sdhdf["data"]["beam_0"]["band_SB0"].attrs["EXPOSURE"]
+            data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
+            flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
+            metadata = sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"]
+            scantimes = metadata["MJD"] * 24.0 * 3600.0
+            num_int = data.shape[0]
 
-                # plot extent
-                start_mjd = scantimes[0]
-                start_time = scantimes[0] - start_mjd
-                end_time = scantimes[-1] - start_mjd + exposure
-                chanwidth = frequency[1] - frequency[0]
-                start_freq = (frequency[0] - chanwidth / 2.0) / 1e6
-                end_freq = (frequency[-1] + chanwidth / 2.0) / 1e6
-                scan_duration = end_time - start_time
-                extent = [start_freq, end_freq, end_time, start_time]
+            # plot extent
+            start_mjd = scantimes[0]
+            start_time = scantimes[0] - start_mjd
+            end_time = scantimes[-1] - start_mjd + exposure
+            chanwidth = frequency[1] - frequency[0]
+            start_freq = (frequency[0] - chanwidth / 2.0) / 1e6
+            end_freq = (frequency[-1] + chanwidth / 2.0) / 1e6
+            scan_duration = end_time - start_time
+            extent = [start_freq, end_freq, end_time, start_time]
 
-                # Set default values for bins if necessary
-                if chanbin is None:
-                    chanbin = max(1, int(len(frequency) / 4000))
-                    print(f"chanbin: {chanbin}")
+            # Storage for plot data
+            plot_num_freq = int(np.ceil(len(frequency) / chanbin))
+            plot_num_int = int(np.round(scan_duration / exposure))
+            plottimes = np.arange(plot_num_int) * exposure
+            plotdata = np.ones((4, plot_num_int, plot_num_freq)) * np.nan
 
-                # Storage for plot data
-                plot_num_freq = int(np.ceil(len(frequency) / chanbin))
-                plot_num_int = int(np.round(scan_duration / exposure))
-                plottimes = np.arange(plot_num_int) * exposure
-                plotdata = np.ones((plot_num_int, plot_num_freq)) * np.nan
+            for i in range(num_int):
+                if i % 10 == 0:
+                    print(
+                        f"Scan {scani}/{len(scans)}     "
+                        + f"Integration {i}/{num_int}   ",
+                        end="\r",
+                    )
 
-                for i in range(num_int):
-                    if i % 10 == 0:
-                        print(
-                            f"Scan {scani}/{len(scans)}     "
-                            + f"Integration {i}/{num_int}   ",
-                            end="\r",
-                        )
+                # get closest plot index for this integration
+                ploti = np.argmin(np.abs(scantimes[i] - start_mjd - plottimes))
 
-                    # get closest plot index for this integration
-                    ploti = np.argmin(np.abs(scantimes[i] - start_mjd - plottimes))
-
+                # Loop over correlations
+                for corr_idx in corr_idxs:
                     # bin in frequency
                     dat = data[i, corr_idx, :]
                     if not plotflagged:
@@ -132,13 +135,14 @@ def waterfall(
                         pad = chanbin - pad
                     dat = np.pad(dat, (0, pad), mode="constant", constant_values=np.nan)
                     dat = np.nanmean(dat.reshape(-1, chanbin), axis=1)
-                    plotdata[ploti] = dat
+                    plotdata[corr_idx, ploti] = dat
 
-                # Generate figure
+            # Generate figures
+            for corr_idx, datatype, label in zip(corr_idxs, datatypes, labels):
                 fig, ax = plt.subplots(figsize=(12, 12),)
-                vmin, vmax = np.nanpercentile(plotdata, q=[5.0, 95.0])
+                vmin, vmax = np.nanpercentile(plotdata[corr_idx], q=[5.0, 95.0])
                 cax = ax.imshow(
-                    plotdata,
+                    plotdata[corr_idx],
                     extent=extent,
                     interpolation="none",
                     aspect="auto",
@@ -190,7 +194,9 @@ def waterfall(
                 ax.set_ylabel(f"Seconds Since MJD = {start_mjd:.6f}")
                 ax.set_title(
                     "{0} {1} {2}".format(
-                        datafile.replace("_", r"\_"), scan.replace("_", r"\_"), datatype
+                        datafile.replace("_", r"\_"),
+                        scan.replace("_", r"\_"),
+                        datatype,
                     )
                 )
                 fig.tight_layout()
