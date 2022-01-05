@@ -57,7 +57,7 @@ def flagbackup(datafile, backupfile):
                 for key in sdhdf["data"]["beam_0"]["band_SB0"].keys()
                 if "scan" in key
             ]
-            scans = sorted(scans, key=lambda scan: int(scan[6:]))
+            scans = sorted(scans, key=lambda scan: int(scan[5:]))
             for scan in scans:
                 flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
                 data = np.empty((0, flag.shape[1]), dtype=bool)
