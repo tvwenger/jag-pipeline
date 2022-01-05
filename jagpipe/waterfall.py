@@ -72,7 +72,7 @@ def waterfall(
                 for scan in scans
                 if f"scan_{scan}" in sdhdf["data"]["beam_0"]["band_SB0"].keys()
             ]
-        scans = sorted(scans, key=lambda scan: int(scan[6:]))
+        scans = sorted(scans, key=lambda scan: int(scan[5:]))
 
         # Get size of frequency and integration axes
         frequency = sdhdf["data"]["beam_0"]["band_SB0"]["frequency"][()]

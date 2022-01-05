@@ -52,7 +52,7 @@ def reset(datafile):
         scans = [
             key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
         ]
-        scans = sorted(scans, key=lambda scan: int(scan[6:]))
+        scans = sorted(scans, key=lambda scan: int(scan[5:]))
         for scan in scans:
             sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"][:] = False
             metadata = np.copy(sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"])
