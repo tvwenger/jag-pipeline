@@ -211,7 +211,7 @@ def worker(inqueue, outqueue, window, cutoff):
 
 
 def flagchan(
-    datafile, timebin=1, window=101, cutoff=5.0, verbose=False,
+    datafile, timebin=1, window=101, cutoff=5.0, num_cpus=None, verbose=False,
 ):
     """
     Read data file, apply flagging, save flag data.
@@ -225,6 +225,8 @@ def flagchan(
             Rolling window size along frequency axis
         cutoff :: scalar
             Sigma clipping threshold
+        num_cpus :: integer
+            Number of CPUs to use in multiprocesing. If None, use all.
         verbose :: boolean
             If True, print information
 
@@ -234,6 +236,10 @@ def flagchan(
         raise ValueError("timebins must be odd")
     if window % 2 == 0:
         raise ValueError("window must be odd")
+
+    # Default CPU count
+    if num_cpus is None:
+        num_cpus = mp.cpu_count()
 
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
@@ -258,7 +264,7 @@ def flagchan(
         outqueue = mp.Queue()
 
         # initialize the pool
-        pool = mp.Pool(mp.cpu_count(), worker, (inqueue, outqueue, window, cutoff))
+        pool = mp.Pool(num_cpus, worker, (inqueue, outqueue, window, cutoff))
 
         # Loop over scans
         starttime = time.time()
@@ -319,7 +325,7 @@ def flagchan(
                 running += 1
 
                 # wait for queue to empty
-                while running >= mp.cpu_count():
+                while running >= num_cpus:
                     try:
                         idx, flg = outqueue.get_nowait()
                         flag[idx, :] = flg
@@ -342,7 +348,7 @@ def flagchan(
             )
 
         # terminate processess
-        for _ in range(mp.cpu_count()):
+        for _ in range(num_cpus):
             inqueue.put(None)
 
         # close queues and pool
@@ -380,6 +386,12 @@ def main():
         "-c", "--cutoff", type=float, default=5.0, help="Sigma clipping threshold",
     )
     parser.add_argument(
+        "--num_cpus",
+        type=int,
+        default=None,
+        help="Number of CPUs to use in multiprocessing",
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Print verbose information",
     )
     args = parser.parse_args()
@@ -388,6 +400,7 @@ def main():
         timebin=args.timebin,
         window=args.window,
         cutoff=args.cutoff,
+        num_cpus=args.num_cpus,
         verbose=args.verbose,
     )
 
