@@ -54,6 +54,7 @@ def flagrestore(datafile, backupfile):
         scans = [
             key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
         ]
+        scans = sorted(scans, key=lambda scan: int(scan[6:]))
         with h5py.File(backupfile, "r") as backuphdf:
             for scan in scans:
                 flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
