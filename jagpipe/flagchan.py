@@ -1,9 +1,9 @@
 """
 flagchan.py
 Identify and flag interference in a SDHDF data file along
-the frequency axis.
+the frequency axis using multiprocessing.
 
-Copyright(C) 2021 by
+Copyright(C) 2021-2022 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)
@@ -22,12 +22,14 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Changelog:
-Trey Wenger - December 2021
+Trey Wenger - January 2022
 """
 
 import argparse
 import h5py
 import numpy as np
+import queue
+import multiprocessing as mp
 import time
 
 from . import __version__
@@ -152,6 +154,11 @@ def generate_flag_mask(data, mask, window=101, cutoff=5.0):
         new_mask :: 1-D array of boolean (shape: N)
             Updated N-length boolean mask
     """
+    # Catch all nan
+    if np.all(np.isnan(data)):
+        mask[:] = True
+        return mask
+
     # flag narrow spikes in total power using gradient filter
     total_power = data[0] + data[1]
     gradient_mask = gradient_filter(total_power, 3)
@@ -188,8 +195,23 @@ def generate_flag_mask(data, mask, window=101, cutoff=5.0):
     return mask
 
 
+def worker(inqueue, outqueue, window, cutoff):
+    # Multiprocessing worker
+    while True:
+        # get data from queue
+        data = inqueue.get(block=True)
+        if data is None:
+            break
+        # Unpack
+        idx, dat, mask = data
+        # Process
+        flag = generate_flag_mask(dat, mask, window=window, cutoff=cutoff)
+        # Save
+        outqueue.put([idx, flag])
+
+
 def flagchan(
-    datafile, timebin=1, window=101, cutoff=5.0, verbose=False,
+    datafile, timebin=1, window=101, cutoff=5.0, num_cpus=None, verbose=False,
 ):
     """
     Read data file, apply flagging, save flag data.
@@ -203,6 +225,8 @@ def flagchan(
             Rolling window size along frequency axis
         cutoff :: scalar
             Sigma clipping threshold
+        num_cpus :: integer
+            Number of CPUs to use in multiprocesing. If None, use all.
         verbose :: boolean
             If True, print information
 
@@ -212,6 +236,10 @@ def flagchan(
         raise ValueError("timebins must be odd")
     if window % 2 == 0:
         raise ValueError("window must be odd")
+
+    # Default CPU count
+    if num_cpus is None:
+        num_cpus = mp.cpu_count()
 
     # Chunk cache size = 8 GB ~ 670 default chunks
     cache_size = 1024 ** 3 * 8
@@ -231,6 +259,13 @@ def flagchan(
         for scan in scans:
             num_int += sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"].shape[0]
 
+        # initialize queues
+        inqueue = mp.Queue()
+        outqueue = mp.Queue()
+
+        # initialize the pool
+        pool = mp.Pool(num_cpus, worker, (inqueue, outqueue, window, cutoff))
+
         # Loop over scans
         starttime = time.time()
         for scan in scans:
@@ -244,8 +279,9 @@ def flagchan(
             index_buffer = np.ones(timebin, dtype=int) * -1
 
             # loop over integrations
+            running = 0
             for i in range(data.shape[0]):
-                if verbose and (complete % 10 == 0):
+                if verbose and complete > 0 and (complete % 10 == 0):
                     runtime = time.time() - starttime
                     timeper = runtime / (complete + 1)
                     remaining = timeper * (num_int - complete)
@@ -254,12 +290,19 @@ def flagchan(
                         + f"ETA: {remaining:0.1f} s          ",
                         end="\r",
                     )
+                # get mask, skip if all data are flagged
+                mask = flag[i, :]
+                if np.all(mask):
+                    continue
+
                 # get integration range
                 start = max(0, i - timebin // 2)
                 end = min(data.shape[0], i + timebin // 2 + 1)
+
                 # remove old integrations from buffer
                 bad = np.where(index_buffer < start)[0]
                 index_buffer[bad] = -1
+
                 # add new integrations to buffer
                 for idx in range(start, end):
                     if idx not in index_buffer:
@@ -267,22 +310,54 @@ def flagchan(
                         data_buffer = np.nansum([data_buffer, data[idx, :, :]], axis=0)
                         isnan_buffer[first_empty] = np.isnan(data[idx, :, :])
                         index_buffer[first_empty] = idx
+
                 # Calculate mean in buffer
                 good = np.where(index_buffer != -1)[0]
                 count_notnan = np.sum(~isnan_buffer[good], axis=0)
                 count_notnan[count_notnan == 0] = _MAX_INT
                 dat = data_buffer / count_notnan
-                # apply mask, update flag
-                mask = flag[i, :]
+
+                # apply mask
                 dat[np.repeat(mask[None, :], 4, axis=0)] = np.nan
-                flag[i, :] = generate_flag_mask(dat, mask, window=window, cutoff=cutoff)
+
+                # add to queue
+                inqueue.put([i, dat, mask])
+                running += 1
+
+                # wait for queue to empty
+                while running >= num_cpus:
+                    try:
+                        idx, flg = outqueue.get_nowait()
+                        flag[idx, :] = flg
+                        complete += 1
+                        running -= 1
+                    except queue.Empty:
+                        pass
+
+            # wait for remaining processes to finish
+            while running > 0:
+                idx, flg = outqueue.get()
+                flag[idx, :] = flg
                 complete += 1
+                running -= 1
         if verbose:
             runtime = time.time() - starttime
             print(
                 f"Flagging integration: {complete}/{num_int} "
                 + f"Runtime: {runtime:.2f} s                     "
             )
+
+        # terminate processess
+        for _ in range(num_cpus):
+            inqueue.put(None)
+
+        # close queues and pool
+        inqueue.close()
+        inqueue.join_thread()
+        outqueue.close()
+        outqueue.join_thread()
+        pool.close()
+        pool.join()
 
 
 def main():
@@ -311,6 +386,12 @@ def main():
         "-c", "--cutoff", type=float, default=5.0, help="Sigma clipping threshold",
     )
     parser.add_argument(
+        "--num_cpus",
+        type=int,
+        default=None,
+        help="Number of CPUs to use in multiprocessing",
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Print verbose information",
     )
     args = parser.parse_args()
@@ -319,6 +400,7 @@ def main():
         timebin=args.timebin,
         window=args.window,
         cutoff=args.cutoff,
+        num_cpus=args.num_cpus,
         verbose=args.verbose,
     )
 
