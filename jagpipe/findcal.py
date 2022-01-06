@@ -147,11 +147,11 @@ def findcal(
             trans = np.zeros_like(time_series, dtype=bool)
             mask = np.zeros_like(time_series, dtype=bool)
             for i in idx:
-                st = i - duration_window // 2
-                en = i + duration_window // 2 + 1
+                st = max(0, i - duration_window // 2)
+                en = min(len(interp_times) - 1, i + duration_window // 2 + 1)
                 # get closest integrations
                 sti = np.argmin(np.abs(interp_times[st] - scantimes))
-                eni = np.argmin(np.abs(interp_times[en] - scantimes))
+                eni = np.argmin(np.abs(interp_times[en] - scantimes)) + 1
                 mask[sti:eni] = True
                 # set flags
                 trans[sti] = True
