@@ -83,41 +83,38 @@ def findcal(
             # get integration timestamps in seconds
             scantimes = metadata["MJD"] * 24.0 * 3600.0
 
-            # fill time gaps with NaN
-            start_time = scantimes[0]
-            end_time = scantimes[-1] + exposure
-            scan_duration = end_time - start_time
-            plot_num_int = int(np.round(scan_duration / exposure))
-            times = np.arange(plot_num_int) * exposure
-            time_series = np.ones_like(times) * np.nan
-            has_data = np.zeros_like(times, dtype=bool)
-
             # Median over range of channels
+            time_series = np.ones_like(scantimes) * np.nan
             if verbose:
                 print("Reading data...")
             for i in range(data.shape[0]):
                 print(i, end="\r")
-                # get closest time
-                timei = np.argmin(np.abs(scantimes[i] - start_time - times))
-                has_data[timei] = True
                 total_power = data[i, 0, start:end] + data[i, 1, start:end]
                 total_power[flag[i, start:end]] = np.nan
                 if not np.all(np.isnan(total_power)):
-                    time_series[timei] = np.nanmedian(total_power)
+                    time_series[i] = np.nanmedian(total_power)
+
+            # Interpolate onto uniform time axis with spacing exposure / 4
+            start_time = scantimes[0]
+            end_time = scantimes[-1] + exposure
+            scan_duration = end_time - start_time
+            plot_num_int = int(np.round(4.0 * scan_duration / exposure))
+            interp_times = start_time + np.arange(plot_num_int) * exposure / 4.0
+            interp_time_series = np.interp(interp_times, scantimes, time_series)
 
             # Rolling mean over cal duration (increase SNR)
             if verbose:
                 print("Calculating statistics...")
-            duration_window = int(duration / exposure)
+            duration_window = int(4.0 * duration / exposure)
             if duration_window % 2 == 0:
                 duration_window += 1
-            duration_mean = rolling_mean(time_series, duration_window)
+            duration_mean = rolling_mean(interp_time_series, duration_window)
 
             # Rolling mean over cal period (remove global variations)
-            period_window = int(period / exposure)
+            period_window = int(4.0 * period / exposure)
             if period_window % 2 == 0:
                 period_window += 1
-            period_mean = rolling_mean(time_series, period_window)
+            period_mean = rolling_mean(interp_time_series, period_window)
 
             # Cal signal shape centered on peak
             tophat = np.zeros(period_window)
@@ -129,7 +126,7 @@ def findcal(
                 print("Identifying cal integrations...")
             # catch where original data are all flagged
             dat = duration_mean - period_mean
-            dat[np.isnan(time_series)] = np.nan
+            dat[np.isnan(interp_time_series)] = np.nan
             # convolve twice (better SNR), handling nans
             num_convolutions = 2
             for i in range(num_convolutions):
@@ -150,26 +147,29 @@ def findcal(
             trans = np.zeros_like(time_series, dtype=bool)
             mask = np.zeros_like(time_series, dtype=bool)
             for i in idx:
-                st = max(0, i - duration_window // 2)
-                en = min(len(mask), i + duration_window // 2 + 1)
-                mask[st:en] = True
+                st = i - duration_window // 2
+                en = i + duration_window // 2 + 1
+                # get closest integrations
+                sti = np.argmin(np.abs(interp_times[st] - scantimes))
+                eni = np.argmin(np.abs(interp_times[en] - scantimes))
+                mask[sti:eni] = True
                 # set flags
-                trans[st] = True
-                trans[en - 1] = True
-                if st > 0:
-                    trans[st - 1] = True
-                if en < len(mask):
-                    trans[en] = True
+                trans[sti] = True
+                trans[eni - 1] = True
+                if sti > 0:
+                    trans[sti - 1] = True
+                if eni < len(mask):
+                    trans[eni] = True
 
             # flag cal transitions
             if verbose:
                 print("Saving cal and flag mask...")
             for i in range(data.shape[0]):
-                if trans[has_data][i]:
+                if trans[i]:
                     flag[i, :] = True
 
             # save cal state
-            metadata["CAL"] = mask[has_data]
+            metadata["CAL"] = mask
             sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"][:] = metadata
 
 
