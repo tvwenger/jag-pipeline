@@ -98,20 +98,21 @@ def findcal(
             start_time = scantimes[0]
             end_time = scantimes[-1] + exposure
             scan_duration = end_time - start_time
-            plot_num_int = int(np.round(4.0 * scan_duration / exposure))
-            interp_times = start_time + np.arange(plot_num_int) * exposure / 4.0
+            interp_exposure = exposure / 4.0
+            plot_num_int = int(np.round(scan_duration / interp_exposure))
+            interp_times = start_time + np.arange(plot_num_int) * interp_exposure
             interp_time_series = np.interp(interp_times, scantimes, time_series)
 
             # Rolling mean over cal duration (increase SNR)
             if verbose:
                 print("Calculating statistics...")
-            duration_window = int(4.0 * duration / exposure)
+            duration_window = int(duration / interp_exposure)
             if duration_window % 2 == 0:
                 duration_window += 1
             duration_mean = rolling_mean(interp_time_series, duration_window)
 
             # Rolling mean over cal period (remove global variations)
-            period_window = int(4.0 * period / exposure)
+            period_window = int(period / interp_exposure)
             if period_window % 2 == 0:
                 period_window += 1
             period_mean = rolling_mean(interp_time_series, period_window)
@@ -148,7 +149,7 @@ def findcal(
             mask = np.zeros_like(time_series, dtype=bool)
             for i in idx:
                 st = max(0, i - duration_window // 2)
-                en = min(len(interp_times) - 1, i + duration_window // 2 + 1)
+                en = min(len(interp_times) - 1, i + duration_window // 2)
                 # get closest integrations
                 sti = np.argmin(np.abs(interp_times[st] - scantimes))
                 eni = np.argmin(np.abs(interp_times[en] - scantimes)) + 1
