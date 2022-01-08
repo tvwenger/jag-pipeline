@@ -71,9 +71,7 @@ def findcal(
             key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
         ]
         scans = sorted(scans, key=lambda scan: int(scan[5:]))
-        for scan in scans:
-            if verbose:
-                print(f"Processing {scan}")
+        for scani, scan in enumerate(scans):
             # get metadata, data, and mask
             metadata = np.copy(sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"])
             data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
@@ -85,10 +83,13 @@ def findcal(
 
             # Median over range of channels
             time_series = np.ones_like(scantimes) * np.nan
-            if verbose:
-                print("Reading data...")
             for i in range(data.shape[0]):
-                print(i, end="\r")
+                if verbose and i % 10 == 0:
+                    print(
+                        f"Scan {scani}/{len(scans)}     "
+                        + f"Integration {i}/{data.shape[0]}   ",
+                        end="\r",
+                    )
                 total_power = data[i, 0, start:end] + data[i, 1, start:end]
                 total_power[flag[i, start:end]] = np.nan
                 if not np.all(np.isnan(total_power)):
@@ -104,8 +105,6 @@ def findcal(
             interp_time_series = np.interp(interp_times, scantimes, time_series)
 
             # Rolling mean over cal duration (increase SNR)
-            if verbose:
-                print("Calculating statistics...")
             duration_window = int(duration / interp_exposure)
             if duration_window % 2 == 0:
                 duration_window += 1
@@ -123,8 +122,6 @@ def findcal(
             en = period_window // 2 + duration_window // 2 + 1
             tophat[st:en] = 1.0
 
-            if verbose:
-                print("Identifying cal integrations...")
             # catch where original data are all flagged
             dat = duration_mean - period_mean
             dat[np.isnan(interp_time_series)] = np.nan
@@ -142,29 +139,37 @@ def findcal(
             # identify peaks
             idx = argrelmax(dat)[0]
 
+            # first and last peak can be compromised by edge effects,
+            # so replace them with expected index
+            delta = int(np.round(period / interp_exposure))
+            idx[0] = idx[1] - delta
+            idx[-1] = idx[-2] + delta
+
+            # the first and last peaks can be missed by edge effects,
+            # so add the expected index
+            idx = np.concatenate([[idx[0] - delta], idx, [idx[-1] + delta]])
+
             # generate calibration mask
-            # flag first and last integration of each mask, as well one before
-            # and one after, to catch off->on and on->off transitions
+            # flag closest integration to transition
             trans = np.zeros_like(time_series, dtype=bool)
             mask = np.zeros_like(time_series, dtype=bool)
             for i in idx:
-                st = max(0, i - duration_window // 2)
-                en = min(len(interp_times) - 1, i + duration_window // 2)
+                st = min(len(interp_times) - 1, max(0, i - duration_window // 2))
+                en = min(len(interp_times) - 1, max(0, i + duration_window // 2))
                 # get closest integrations
                 sti = np.argmin(np.abs(interp_times[st] - scantimes))
-                eni = np.argmin(np.abs(interp_times[en] - scantimes)) + 1
+                eni = np.argmin(np.abs(interp_times[en] - scantimes))
                 mask[sti:eni] = True
-                # set flags
-                trans[sti] = True
-                trans[eni - 1] = True
-                if sti > 0:
-                    trans[sti - 1] = True
-                if eni < len(mask):
+                # set flags as long as transition integration isn't beyond
+                # the edge of the data
+                st = i - duration_window // 2
+                en = i + duration_window // 2
+                if st >= 0 and st <= len(interp_times) - 1:
+                    trans[sti] = True
+                if en >= 0 and en <= len(interp_times) - 1:
                     trans[eni] = True
 
             # flag cal transitions
-            if verbose:
-                print("Saving cal and flag mask...")
             for i in range(data.shape[0]):
                 if trans[i]:
                     flag[i, :] = True
