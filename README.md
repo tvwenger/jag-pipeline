@@ -51,7 +51,7 @@ You probably want to run the pipeline scripts in this order. Be sure to run each
 first so you can configure them to your needs.
 
 * `jagpipe-combine` to combine multiple SDHDF files into one, and optionally bin in time and/or frequency.
-* `jagpipe-flag` to automatically flag interference along the frequency axis.
+* `jagpipe-flagchan` to automatically flag interference along the frequency axis.
 * `jagpipe-waterfall` to generate a waterfall figure for a SDHDF dataset.
 * `jagpipe-findcal` to identify cal-on integrations and to flag cal-on to cal-off transition integrations.
 

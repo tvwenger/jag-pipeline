@@ -169,7 +169,7 @@ def generate_flag_mask(data, mask, window=101, cutoff=5.0):
     mean_tp = rolling_mean(total_power, window)
 
     # rolling window mean and rms on cross correlations.
-    cross_power = 2.0 * data[2] + 2.0 * data[3]
+    cross_power = np.sqrt(2.0) * (data[2] + data[3])
     cross_power[mask] = np.nan
     mean_cross = rolling_mean(cross_power, window)
     rms_cross = rolling_std(cross_power, window)
