@@ -154,6 +154,9 @@ def generate_flag_mask(data, mask, window=101, cutoff=5.0):
         new_mask :: 1-D array of boolean (shape: N)
             Updated N-length boolean mask
     """
+    if window % 2 == 0:
+        raise ValueError("window must be odd")
+
     # Catch all nan
     if np.all(np.isnan(data)):
         mask[:] = True

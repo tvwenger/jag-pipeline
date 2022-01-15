@@ -28,6 +28,7 @@ setup(
             "jagpipe-flagbackup=jagpipe.flagbackup:main",
             "jagpipe-flagrestore=jagpipe.flagrestore:main",
             "jagpipe-flagsummary=jagpipe.flagsummary:main",
+            "jagpipe-calibrate=jagpipe.calibrate:main",
         ]
     },
 )
