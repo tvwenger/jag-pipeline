@@ -25,6 +25,7 @@ Trey Wenger - December 2021
 """
 
 import argparse
+import warnings
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
@@ -134,7 +135,11 @@ def waterfall(
                     if pad != 0:
                         pad = chanbin - pad
                     dat = np.pad(dat, (0, pad), mode="constant", constant_values=np.nan)
-                    dat = np.nanmean(dat.reshape(-1, chanbin), axis=1)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            action="ignore", message="Mean of empty slice"
+                        )
+                        dat = np.nanmean(dat.reshape(-1, chanbin), axis=1)
                     plotdata[corr_idx, ploti] = dat
 
             # Generate figures
@@ -203,6 +208,7 @@ def waterfall(
                 fname = f"{prefix}_{scan}_{label}.png"
                 fig.savefig(fname, dpi=300, bbox_inches="tight")
                 plt.close(fig)
+    print()
 
 
 def main():
