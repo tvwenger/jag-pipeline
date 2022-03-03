@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "jagpipe-combine=jagpipe.combine:main",
+            "jagpipe-concat=jagpipe.concat:main",
             "jagpipe-flagchan=jagpipe.flagchan:main",
             "jagpipe-waterfall=jagpipe.waterfall:main",
             "jagpipe-reset=jagpipe.reset:main",

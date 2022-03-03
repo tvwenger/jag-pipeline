@@ -55,16 +55,19 @@ def flagsummary(datafile):
             scan_data = 0
             scan_flagged = 0
             flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
+            source = sdhdf["data"]["beam_0"]["band_SB0"][scan].attrs["SOURCE"]
             for i in range(flag.shape[0]):
                 scan_data += flag[i].size
                 scan_flagged += np.sum(flag[i])
             print(
-                f"{scan}: {scan_flagged}/{scan_data} ({100.0*scan_flagged/scan_data:0.2f}%) flagged"
+                f"{scan} [{source}]: {scan_flagged}/{scan_data} "
+                + f"({100.0*scan_flagged/scan_data:0.2f}%) flagged"
             )
             num_data += scan_data
             num_flagged += scan_flagged
         print(
-            f"Total: {num_flagged}/{num_data} ({100.0*num_flagged/num_data:0.2f}%) flagged"
+            f"Total: {num_flagged}/{num_data} "
+            + f"({100.0*num_flagged/num_data:0.2f}%) flagged"
         )
 
 
