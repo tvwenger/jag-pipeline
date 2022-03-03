@@ -28,10 +28,14 @@ import argparse
 import warnings
 import h5py
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch, Rectangle
 
 from . import __version__
+
+# Force non-GUI backend
+mpl.use('Agg')
 
 
 def waterfall(

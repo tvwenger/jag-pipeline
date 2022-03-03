@@ -141,7 +141,7 @@ def generate_flag_mask(data, mask, window=101, cutoff=5.0):
 
     Inputs:
         data :: 2-D array of scalars (shape: 4 x N)
-            N-length data, with [XX, YY, XY or Re(XY), YX or Im(YX)]
+            N-length data, with [XX, YY, Re(XY), Im(XY)]
             along the first axis.
         mask :: 1-D array of boolean (shape: N)
             Initial N-length boolean mask
@@ -304,8 +304,13 @@ def flagchan(
                 end = min(data.shape[0], i + timebin // 2 + 1)
 
                 # remove old integrations from buffer
-                bad = np.where(index_buffer < start)[0]
-                index_buffer[bad] = -1
+                for buffer_idx, idx in enumerate(index_buffer):
+                    if index_buffer > -1 and index_buffer < start:
+                        data_buffer = np.nansum([data_buffer, -data[idx, :, :]], axis=0)
+                        isnan_buffer[buffer_idx] = np.zeros_like(
+                            isnan_buffer[buffer_idx]
+                        )
+                        index_buffer[buffer_idx] = -1
 
                 # add new integrations to buffer
                 for idx in range(start, end):
