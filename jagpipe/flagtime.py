@@ -206,9 +206,15 @@ def flagtime(
         for scan in scans:
             data = sdhdf[f"data/beam_0/band_SB0/{scan}/data"]
             flag = sdhdf[f"data/beam_0/band_SB0/{scan}/flag"]
+            metadata = sdhdf[f"data/beam_0/band_SB0/{scan}/metadata"]
+
+            # Check that some cal-on data are present
+            if np.all(~metadata['CAL']):
+                print(f"WARNING: {scan} has no cal-signal-on data")
 
             # skip one-integration scans
             if data.shape[0] == 1:
+                print(f"WARNING: Skipping {scan} which has only one integration")
                 complete += data.shape[2]
                 continue
 

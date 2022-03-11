@@ -35,7 +35,7 @@ from matplotlib.patches import Patch, Rectangle
 from . import __version__
 
 # Force non-GUI backend
-mpl.use('Agg')
+mpl.use("Agg")
 
 
 def waterfall(
@@ -121,7 +121,7 @@ def waterfall(
             for i in range(num_int):
                 if i % 10 == 0:
                     print(
-                        f"Scan {scani}/{len(scans)}     "
+                        f"Scan {scan} ({scani}/{len(scans)-1})     "
                         + f"Integration {i}/{num_int}   ",
                         end="\r",
                     )
