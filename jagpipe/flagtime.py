@@ -1,7 +1,7 @@
 """
-flagchan.py
+flagtime.py
 Identify and flag interference in a SDHDF data file along
-the frequency axis using multiprocessing.
+the time axis using multiprocessing.
 
 Copyright(C) 2021-2022 by
 Trey V. Wenger; tvwenger@gmail.com
@@ -39,7 +39,7 @@ from .flagutils import generate_flag_mask
 _MAX_INT = np.iinfo(int).max
 
 
-def worker(inqueue, outqueue, datafile, scan, batchsize, timebin, window, cutoff, grow):
+def worker(inqueue, outqueue, datafile, scan, batchsize, chanbin, window, cutoff, grow):
     """
     Multiprocessing worker. Handles batch preparation and flag generation.
     """
@@ -51,15 +51,17 @@ def worker(inqueue, outqueue, datafile, scan, batchsize, timebin, window, cutoff
         # get data and mask
         data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
         flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
+        metadata = sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"]
+        calon = metadata["CAL"]
 
         # storage for batch processing
-        data_batch = np.zeros((batchsize, data.shape[1], data.shape[2]), dtype=float)
-        mask_batch = np.zeros((batchsize, data.shape[2]), dtype=bool)
+        data_batch = np.zeros((data.shape[0], data.shape[1], batchsize), dtype=float)
+        mask_batch = np.zeros((data.shape[0], batchsize), dtype=bool)
 
         # storage for averaging
-        data_buffer = np.zeros((data.shape[1], data.shape[2]), dtype=float)
-        isnan_buffer = np.zeros((timebin, data.shape[1], data.shape[2]), dtype=bool)
-        index_buffer = np.ones(timebin, dtype=int) * -1
+        data_buffer = np.zeros((data.shape[0], data.shape[1]), dtype=float)
+        isnan_buffer = np.zeros((chanbin, data.shape[0], data.shape[1]), dtype=bool)
+        index_buffer = np.ones(chanbin, dtype=int) * -1
 
         while True:
             # get data from queue
@@ -72,20 +74,20 @@ def worker(inqueue, outqueue, datafile, scan, batchsize, timebin, window, cutoff
             # Unpack index range from queue
             startidx, endidx = queue
 
-            # loop over integrations
+            # loop over channels
             batch = 0
             for i in range(startidx, endidx):
-                # get mask for this integration
-                mask = flag[i, :]
+                # get mask for this channel
+                mask = flag[:, i]
 
-                # get integration range
-                start = max(0, i - timebin // 2)
-                end = min(data.shape[0], i + timebin // 2 + 1)
+                # get channel range
+                start = max(0, i - chanbin // 2)
+                end = min(data.shape[2], i + chanbin // 2 + 1)
 
                 # remove old integrations from buffer
                 for buffer_idx, idx in enumerate(index_buffer):
                     if idx > -1 and idx < start:
-                        data_buffer = np.nansum([data_buffer, -data[idx, :, :]], axis=0)
+                        data_buffer = np.nansum([data_buffer, -data[:, :, idx]], axis=0)
                         isnan_buffer[buffer_idx] = np.zeros_like(
                             isnan_buffer[buffer_idx]
                         )
@@ -95,8 +97,8 @@ def worker(inqueue, outqueue, datafile, scan, batchsize, timebin, window, cutoff
                 for idx in range(start, end):
                     if idx not in index_buffer:
                         first_empty = np.where(index_buffer == -1)[0][0]
-                        data_buffer = np.nansum([data_buffer, data[idx, :, :]], axis=0)
-                        isnan_buffer[first_empty] = np.isnan(data[idx, :, :])
+                        data_buffer = np.nansum([data_buffer, data[:, :, idx]], axis=0)
+                        isnan_buffer[first_empty] = np.isnan(data[:, :, idx])
                         index_buffer[first_empty] = idx
 
                 # Calculate mean in buffer
@@ -106,46 +108,51 @@ def worker(inqueue, outqueue, datafile, scan, batchsize, timebin, window, cutoff
                 dat = data_buffer / count_notnan
 
                 # apply mask
-                dat[np.repeat(mask[None, :], 4, axis=0)] = np.nan
+                dat[np.repeat(mask[:, None], 4, axis=1)] = np.nan
+
+                # Estimate median cal-on and cal-off power, normalize to constant power
+                median_calon = np.nanmedian(dat[calon], axis=0)
+                median_caloff = np.nanmedian(dat[~calon], axis=0)
+                dat[calon] = dat[calon] - (median_calon - median_caloff)
 
                 # add to batch
-                data_batch[batch] = dat
-                mask_batch[batch] = mask
+                data_batch[:, :, batch] = dat
+                mask_batch[:, batch] = mask
                 batch += 1
 
             # submit batch for processing
             outmask = generate_flag_mask(
-                data_batch[:batch].T,
-                mask_batch[:batch].T,
+                data_batch[:, :, :batch],
+                mask_batch[:, :batch],
                 window=window,
                 cutoff=cutoff,
                 grow=grow,
-            ).T
+            )
 
             # send result to output queue
             outqueue.put([startidx, endidx, outmask])
 
 
-def flagchan(
+def flagtime(
     datafile,
-    timebin=1,
-    batchsize=20,
-    window=21,
+    chanbin=1,
+    batchsize=20000,
+    window=11,
     cutoff=5.0,
     grow=0.75,
     num_cpus=None,
     verbose=False,
 ):
     """
-    Flag an SDHDF dataset along the frequency axis.
+    Flag an SDHDF dataset along the time axis.
 
     Inputs:
         datafile :: string
             SDHDF file
-        timebin :: odd integer
-            Average over this many integrations before flagging
+        chanbin :: odd integer
+            Average over this many channels before flagging
         batchsize :: integer
-            Process in batches of this many integrations
+            Process in batches of this many channels
         window :: integer
             Rolling window size
         cutoff :: scalar
@@ -160,8 +167,8 @@ def flagchan(
 
     Returns: Nothing
     """
-    if timebin % 2 == 0:
-        raise ValueError("timebin must be odd")
+    if chanbin % 2 == 0:
+        raise ValueError("chanbin must be odd")
     if window % 2 == 0:
         raise ValueError("window must be odd")
 
@@ -177,28 +184,39 @@ def flagchan(
     cache_size = 1024 ** 3 * 8
     with h5py.File(datafile, "r+", rdcc_nbytes=cache_size) as sdhdf:
         # add history items
-        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN VERSION: {__version__}")
-        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN TIMEBIN: {timebin}")
-        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN BATCHSIZE: {batchsize}")
-        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN WINDOW: {window}")
-        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN CUTOFF: {cutoff}")
-        add_history(sdhdf, f"JAG-PIPELINE-FLAGCHAN GROW: {grow}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGTIME VERSION: {__version__}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGTIME TIMEBIN: {chanbin}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGTIME BATCHSIZE: {batchsize}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGTIME WINDOW: {window}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGTIME CUTOFF: {cutoff}")
+        add_history(sdhdf, f"JAG-PIPELINE-FLAGTIME GROW: {grow}")
 
-        # get total number of integrations
-        num_ints = 0
+        # get total number of channels
+        num_chans = 0
         complete = 0
         scans = [
             key for key in sdhdf["data"]["beam_0"]["band_SB0"].keys() if "scan" in key
         ]
         scans = sorted(scans, key=lambda scan: int(scan[5:]))
         for scan in scans:
-            num_ints += sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"].shape[0]
+            num_chans += sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"].shape[2]
 
         # Loop over scans
         starttime = time.time()
         for scan in scans:
             data = sdhdf[f"data/beam_0/band_SB0/{scan}/data"]
             flag = sdhdf[f"data/beam_0/band_SB0/{scan}/flag"]
+            metadata = sdhdf[f"data/beam_0/band_SB0/{scan}/metadata"]
+
+            # Check that some cal-on data are present
+            if np.all(~metadata['CAL']):
+                print(f"WARNING: {scan} has no cal-signal-on data")
+
+            # skip one-integration scans
+            if data.shape[0] == 1:
+                print(f"WARNING: Skipping {scan} which has only one integration")
+                complete += data.shape[2]
+                continue
 
             # initialize queues
             inqueue = mp.Queue()
@@ -214,7 +232,7 @@ def flagchan(
                     datafile,
                     scan,
                     batchsize,
-                    timebin,
+                    chanbin,
                     window,
                     cutoff,
                     grow,
@@ -223,23 +241,23 @@ def flagchan(
 
             # submit jobs to queue
             running = 0
-            for start in range(0, data.shape[0], batchsize):
-                end = min(data.shape[0], start + batchsize)
+            for start in range(0, data.shape[2], batchsize):
+                end = min(data.shape[2], start + batchsize)
                 inqueue.put([start, end])
                 running += 1
 
             # wait for queue to empty
             while running > 0:
                 start, end, mask = outqueue.get()
-                flag[start:end, :] = mask
+                flag[:, start:end] = mask
                 complete += end - start
                 running -= 1
                 if verbose:
                     runtime = time.time() - starttime
                     timeper = runtime / (complete + 1)
-                    remaining = timeper * (num_ints - complete)
+                    remaining = timeper * (num_chans - complete)
                     print(
-                        f"Flagging Integration: {complete}/{num_ints} "
+                        f"Flagging Channel: {complete}/{num_chans} "
                         + f"ETA: {remaining:0.1f} s          ",
                         end="\r",
                     )
@@ -258,7 +276,7 @@ def flagchan(
         if verbose:
             runtime = time.time() - starttime
             print(
-                f"Flagging integration: {complete}/{num_ints} "
+                f"Flagging Channel: {complete}/{num_chans} "
                 + f"Runtime: {runtime:.2f} s                     "
             )
 
@@ -266,7 +284,7 @@ def flagchan(
 def main():
     parser = argparse.ArgumentParser(
         description="Automatically flag SDHDF along frequency axis",
-        prog="flagchan.py",
+        prog="flagtime.py",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -276,19 +294,19 @@ def main():
         "datafile", type=str, help="SDHDF file",
     )
     parser.add_argument(
-        "--timebin",
+        "--chanbin",
         type=int,
         default=1,
-        help="Average this number of integrations before flagging",
+        help="Average this number of channels before flagging",
     )
     parser.add_argument(
         "--batchsize",
         type=int,
-        default=20,
-        help="Process in batches of this many integrations",
+        default=20000,
+        help="Process in batches of this many channels",
     )
     parser.add_argument(
-        "--window", type=int, default=21, help="Rolling window size",
+        "--window", type=int, default=11, help="Rolling window size",
     )
     parser.add_argument(
         "--cutoff", type=float, default=5.0, help="Sigma clipping threshold",
@@ -309,9 +327,9 @@ def main():
         "-v", "--verbose", action="store_true", help="Print verbose information",
     )
     args = parser.parse_args()
-    flagchan(
+    flagtime(
         args.datafile,
-        timebin=args.timebin,
+        chanbin=args.chanbin,
         batchsize=args.batchsize,
         window=args.window,
         cutoff=args.cutoff,

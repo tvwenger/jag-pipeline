@@ -168,12 +168,16 @@ def get_avg_cal_spectra(
 
     # flag calon
     mask = np.any(np.isnan(avg_calon), axis=0)
-    mask = generate_flag_mask(avg_calon, mask, window=flagwindow, cutoff=flagcutoff)
+    mask = generate_flag_mask(
+        avg_calon[None].T, mask[None].T, window=flagwindow, cutoff=flagcutoff
+    ).T[0]
     avg_calon[np.repeat(mask[None, :], 4, axis=0)] = np.nan
 
     # flag caloff
     mask = np.any(np.isnan(avg_caloff), axis=0)
-    mask = generate_flag_mask(avg_caloff, mask, window=flagwindow, cutoff=flagcutoff)
+    mask = generate_flag_mask(
+        avg_caloff[None].T, mask[None].T, window=flagwindow, cutoff=flagcutoff
+    ).T[0]
     avg_caloff[np.repeat(mask[None, :], 4, axis=0)] = np.nan
     return avg_calon, avg_caloff
 
@@ -346,6 +350,17 @@ def calibrate(
                     data = sdhdf["data"][beam][band][scan]["data"]
                     flag = sdhdf["data"][beam][band][scan]["flag"]
                     metadata = sdhdf["data"][beam][band][scan]["metadata"]
+
+                    # Check that some cal-on data are present
+                    if np.all(~metadata["CAL"]):
+                        print(f"WARNING: {scan} has no cal-signal-on data")
+
+                    # skip one-integration scans
+                    if data.shape[0] == 1:
+                        print(
+                            f"WARNING: Skipping {scan} which has only one integration"
+                        )
+                        continue
 
                     # Get average CAL-ON and CAL-OFF sepctra
                     avg_calon, avg_caloff = get_avg_cal_spectra(

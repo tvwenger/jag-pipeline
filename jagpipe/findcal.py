@@ -32,7 +32,7 @@ from scipy.signal import argrelmax
 
 from . import __version__
 from .utils import add_history
-from .flagchan import rolling_mean
+from .flagutils import rolling_mean
 
 
 def findcal(
@@ -80,6 +80,10 @@ def findcal(
 
             # get integration timestamps in seconds
             scantimes = metadata["MJD"] * 24.0 * 3600.0
+
+            # skip short scans (less than one cal period duration)
+            if data.shape[0] * exposure < period:
+                continue
 
             # Median over range of channels
             time_series = np.ones_like(scantimes) * np.nan

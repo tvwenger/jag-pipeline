@@ -50,10 +50,14 @@ combine.combine(datafiles, outfile, chanbin=1, timebin=1, verbose=False)
 You probably want to run the pipeline scripts in this order. Be sure to run each with `--help`
 first so you can configure them to your needs.
 
-* `jagpipe-combine` to combine multiple SDHDF files into one, and optionally bin in time and/or frequency.
+* `jagpipe-combine` to combine multiple SDHDF files produced by the JAG filler into one SDHDF file, and optionally bin in time and/or frequency.
+* `jagpipe-concat` to concatenate multiple SDHDF files produced by `jagpipe-combine` into one SDHDF file. This is useful if, for example, you had to run `jagpipe-combine`
+   on multiple data subsets to conserve disk space.
 * `jagpipe-flagchan` to automatically flag interference along the frequency axis.
-* `jagpipe-waterfall` to generate a waterfall figure for a SDHDF dataset.
+* `jagpipe-waterfall` to generate a waterfall plot for a SDHDF dataset.
 * `jagpipe-findcal` to identify cal-on integrations and to flag cal-on to cal-off transition integrations.
+* `jagpipe-flagtime` to automatically flag interference along the time axis. Note that cal-on integrations should already be identified (a la `jagpipe-findcal`)
+* `jagpipe-calibrate` to apply known cal-noise temperature and convert measured powers to antenna temperatures.
 
 Also:
 
@@ -66,3 +70,26 @@ Also:
 ## TODO
 * Deal with scans properly once implemented by JAG filler
 * Get rid of `setsource.py` once implemented by JAG filler
+
+## Issues and Contributing
+
+Anyone is welcome to submit issues or contribute to the development
+of this software via [Github](https://github.com/tvwenger/jag-pipeline).
+
+## License and Warranty
+
+GNU Public License
+http://www.gnu.org/licenses/
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published
+by the Free Software Foundation, either version 3 of the License,
+or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
