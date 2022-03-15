@@ -39,7 +39,13 @@ mpl.use("Agg")
 
 
 def waterfall(
-    datafile, prefix, scans=None, chanbin=None, showcal=False, plotflagged=False,
+    datafile,
+    prefix,
+    scans=None,
+    chanbin=None,
+    showcal=False,
+    plotflagged=False,
+    calibrated=False,
 ):
     """
     Generate waterfall figure from a given SDHDF datafile.
@@ -58,6 +64,8 @@ def waterfall(
             If True, highlight cal-on integrations
         plotflagged :: boolean
             If True, plot flagged data
+        calibrated :: boolean
+            If True, plot calibrated data
 
     Returns: Nothing
     """
@@ -96,7 +104,10 @@ def waterfall(
         for scani, scan in enumerate(scans):
             # get data
             exposure = sdhdf["data"]["beam_0"]["band_SB0"].attrs["EXPOSURE"]
-            data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
+            if calibrated:
+                data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["calibrated"]
+            else:
+                data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
             flag = sdhdf["data"]["beam_0"]["band_SB0"][scan]["flag"]
             metadata = sdhdf["data"]["beam_0"]["band_SB0"][scan]["metadata"]
             scantimes = metadata["MJD"] * 24.0 * 3600.0
@@ -158,7 +169,11 @@ def waterfall(
                     vmin=vmin,
                     vmax=vmax,
                 )
-                fig.colorbar(cax, ax=ax, label="Relative Power")
+                fig.colorbar(
+                    cax,
+                    ax=ax,
+                    label="Antenna Temperature (K)" if calibrated else "Relative Power",
+                )
 
                 # highligh cal-on integrations
                 if showcal:
@@ -254,6 +269,9 @@ def main():
     parser.add_argument(
         "--plotflagged", action="store_true", default=False, help="Plot flagged data",
     )
+    parser.add_argument(
+        "--calibrated", action="store_true", default=False, help="Plot calibrated data",
+    )
     args = parser.parse_args()
     waterfall(
         args.datafile,
@@ -262,6 +280,7 @@ def main():
         chanbin=args.chanbin,
         showcal=args.showcal,
         plotflagged=args.plotflagged,
+        calibrated=args.calibrated,
     )
 
 
