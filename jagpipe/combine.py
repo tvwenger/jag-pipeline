@@ -402,7 +402,7 @@ def combine(
                                 + f"({scan.attrs['SOURCE']}) "
                                 + f"which only has {scan['data'].shape[0]} integrations"
                             )
-                        del scan
+                        del sdhdf["data"]["beam_0"]["band_SB0"][scan.attrs["NAME"]]
                         scan_count -= 1
 
                     # Create new scan
@@ -502,6 +502,12 @@ def main():
         help="Maximum offset relative to HPBW to match source position",
     )
     parser.add_argument(
+        "--minint",
+        type=int,
+        default=5,
+        help="Mininmum number of integrations required to create a scan",
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Print verbose information",
     )
     args = parser.parse_args()
@@ -513,6 +519,7 @@ def main():
         timebin=args.timebin,
         sourcefile=args.sourcefile,
         hpbwfrac=args.hpbwfrac,
+        minint=args.minint,
         verbose=args.verbose,
     )
 
