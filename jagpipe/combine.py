@@ -395,7 +395,7 @@ def combine(
                         scan["flag"][-1] = flag_mask
 
                     # delete last scan if it did not meet minint threshold
-                    if scan["data"].shape[0] < minint:
+                    if scan is not None and scan["data"].shape[0] < minint:
                         if verbose:
                             print(
                                 f"Deleting {scan.attrs['NAME']} "
