@@ -147,6 +147,7 @@ def combine(
     timebin=1,
     sourcefile="sources.txt",
     hpbwfrac=0.1,
+    minint=5,
     verbose=False,
 ):
     """
@@ -177,6 +178,10 @@ def combine(
             Telescope position must be within this fraction of the
             HPBW at the highest frequency to be considered a match
             to a source position.
+        minint :: integer
+            Minimum number of integrations to include in a scan. Useful
+            to exclude integrations that are just slews through a position
+            in sourcefile.
         verbose :: boolean
             If True, print information
 
@@ -389,6 +394,17 @@ def combine(
                     if scan is not None:
                         scan["flag"][-1] = flag_mask
 
+                    # delete last scan if it did not meet minint threshold
+                    if scan is not None and scan["data"].shape[0] < minint:
+                        if verbose:
+                            print(
+                                f"Deleting {scan.attrs['NAME']} "
+                                + f"({scan.attrs['SOURCE']}) "
+                                + f"which only has {scan['data'].shape[0]} integrations"
+                            )
+                        del sdhdf["data"]["beam_0"]["band_SB0"][scan.attrs["NAME"]]
+                        scan_count -= 1
+
                     # Create new scan
                     scan = init_scan(
                         band_sb0,
@@ -399,6 +415,11 @@ def combine(
                         chunks=chunks,
                     )
                     scan_count += 1
+                    if verbose:
+                        print(
+                            f"Creating scan {scan.attrs['NAME']} "
+                            + f"({scan.attrs['SOURCE']})"
+                        )
 
                 # Add metadata row
                 hourangle = utc.sidereal_time("mean").hourangle - coord.ra.hourangle
@@ -481,6 +502,12 @@ def main():
         help="Maximum offset relative to HPBW to match source position",
     )
     parser.add_argument(
+        "--minint",
+        type=int,
+        default=5,
+        help="Mininmum number of integrations required to create a scan",
+    )
+    parser.add_argument(
         "-v", "--verbose", action="store_true", help="Print verbose information",
     )
     args = parser.parse_args()
@@ -492,6 +519,7 @@ def main():
         timebin=args.timebin,
         sourcefile=args.sourcefile,
         hpbwfrac=args.hpbwfrac,
+        minint=args.minint,
         verbose=args.verbose,
     )
 

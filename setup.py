@@ -21,6 +21,7 @@ setup(
         "console_scripts": [
             "jagpipe-combine=jagpipe.combine:main",
             "jagpipe-concat=jagpipe.concat:main",
+            "jagpipe-listobs=jagpipe.listobs:main",
             "jagpipe-flagchan=jagpipe.flagchan:main",
             "jagpipe-flagtime=jagpipe.flagtime:main",
             "jagpipe-waterfall=jagpipe.waterfall:main",

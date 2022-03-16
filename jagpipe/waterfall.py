@@ -104,6 +104,7 @@ def waterfall(
         for scani, scan in enumerate(scans):
             # get data
             exposure = sdhdf["data"]["beam_0"]["band_SB0"].attrs["EXPOSURE"]
+            source = sdhdf["data"]["beam_0"]["band_SB0"][scan].attrs["SOURCE"]
             if calibrated:
                 data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["calibrated"]
             else:
@@ -217,9 +218,10 @@ def waterfall(
                 ax.set_xlabel(f"{freqframe} Frequency (MHz)")
                 ax.set_ylabel(f"Seconds Since MJD = {start_mjd:.6f}")
                 ax.set_title(
-                    "{0} {1} {2}".format(
+                    "{0} {1} {2} {3}".format(
                         datafile.replace("_", r"\_"),
                         scan.replace("_", r"\_"),
+                        source,
                         datatype,
                     )
                 )
