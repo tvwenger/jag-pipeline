@@ -415,6 +415,11 @@ def combine(
                         chunks=chunks,
                     )
                     scan_count += 1
+                    if verbose:
+                        print(
+                            f"Creating scan {scan.attrs['NAME']} "
+                            + f"({scan.attrs['SOURCE']})"
+                        )
 
                 # Add metadata row
                 hourangle = utc.sidereal_time("mean").hourangle - coord.ra.hourangle
