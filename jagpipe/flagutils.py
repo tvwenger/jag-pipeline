@@ -217,3 +217,63 @@ def generate_flag_mask(data, mask, window=101, cutoff=5.0, grow=0.75):
     flagged = rolling_mean(mask, window)
     mask = mask | (flagged > grow)
     return mask
+
+
+def generate_flag_mask_tp(data, mask, window=101, cutoff=5.0, grow=0.75):
+    """
+    Like generate_flag_mask, but only for total power data.
+
+    Inputs:
+        data :: 1-D array of scalars (shape: A)
+            A-length total power data. Filters are applied along first axis.
+        mask :: 1-D array of boolean (shape: A)
+            Initial boolean mask
+        window :: integer
+            Rolling window size along first axis
+        cutoff :: scalar
+            Sigma clip
+        grow :: scalar between 0.0 and 1.0
+            Extend mask where more than grow*window adjacent data
+            are masked
+
+    Returns:
+        new_mask :: 1-D array of boolean (shape: A)
+            Updated boolean mask
+    """
+    if window % 2 == 0:
+        raise ValueError("window must be odd")
+
+    # interpolate through NaNs
+    x = np.arange(data.shape[0])
+    isnan = np.isnan(data)
+    if np.all(isnan):
+        mask[:] = True
+        return mask
+    data[isnan] = np.interp(x[isnan], x[~isnan], data[~isnan])
+
+    # flag narrow spikes in total power using gradient filter
+    gradient_mask = gradient_filter(data, delta=1, cutoff=cutoff)
+    mask = mask | gradient_mask
+
+    # update mask
+    data[mask] = np.nan
+
+    # rolling window mean and rms on total power
+    mean_tp = rolling_mean(data, window)
+    rms_tp = rolling_std(data, window)
+
+    # flag narrow spikes in total power
+    norm_data = (data - mean_tp) / rms_tp
+    mask = mask | (np.abs(norm_data) > cutoff)
+
+    # flag broad noise based on rms
+    norm_rms = rms_tp / mean_tp
+    med = np.nanmedian(norm_rms, axis=0)
+    rms = 1.4826 * np.nanmedian(np.abs(norm_rms - med), axis=0)
+    norm_rms = (norm_rms - med) / rms
+    mask = mask | (np.abs(norm_rms) > cutoff)
+
+    # flag channels where >grow fraction of adjacent channels are flagged
+    flagged = rolling_mean(mask, window)
+    mask = mask | (flagged > grow)
+    return mask
