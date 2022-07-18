@@ -145,7 +145,7 @@ def combine(
     exposure=None,
     chanbin=1,
     timebin=1,
-    sourcefile="sources.txt",
+    sourcefile=None,
     hpbwfrac=0.1,
     minint=5,
     verbose=False,
@@ -194,10 +194,11 @@ def combine(
     datafiles.sort()
 
     # Get source information
-    sources = np.genfromtxt(sourcefile, dtype=None, names=True, encoding="utf-8")
-    source_coords = SkyCoord(
-        sources["RA"], sources["Dec"], frame="icrs", unit="hourangle,deg",
-    )
+    if sourcefile is not None:
+        sources = np.genfromtxt(sourcefile, dtype=None, names=True, encoding="utf-8")
+        source_coords = SkyCoord(
+            sources["RA"], sources["Dec"], frame="icrs", unit="hourangle,deg",
+        )
 
     # DRAO position
     location = EarthLocation.from_geodetic(
@@ -294,8 +295,7 @@ def combine(
 
         # storage for binned data and metadata
         data_buffer = None
-        time_buffer = None
-        position_buffer = None
+        metadata_buffer = None
 
         # Loop over input data files
         for datai, datafile in enumerate(datafiles):
@@ -312,8 +312,7 @@ def combine(
                 )
 
                 # Read metadata
-                raw_time = inf["data"]["beam_0"]["band_SB4"]["scan_0"]["time"][()]
-                raw_position = inf["data"]["beam_0"]["band_SB4"]["scan_0"]["position"][
+                raw_metadata = inf["data"]["beam_0"]["band_SB4"]["scan_0"]["metadata"][
                     ()
                 ]
 
@@ -331,16 +330,14 @@ def combine(
                 raw_data.shape[0], raw_data.shape[1], -1
             )
 
-            # add data to buffer
+            # add data and metadata to buffer
             if data_buffer is None:
                 data_buffer = raw_data.copy()
-                time_buffer = raw_time.copy()
-                position_buffer = raw_position.copy()
+                metadata_buffer = raw_metadata.copy()
             else:
                 data_buffer = np.concatenate([data_buffer, raw_data], axis=0)
-                time_buffer = np.concatenate([time_buffer, raw_time], axis=0)
-                position_buffer = np.concatenate(
-                    [position_buffer, raw_position], axis=0
+                metadata_buffer = np.concatenate(
+                    [metadata_buffer, raw_metadata], axis=0
                 )
 
             # flag and null flag masks
@@ -360,19 +357,37 @@ def combine(
                 # extract rows from buffer, bin in time
                 data = np.mean(data_buffer[0:timebin], axis=0)
                 utc = Time(
-                    time_buffer[0], format="isot", scale="utc", location=location
+                    metadata_buffer["utc"][0],
+                    format="isot",
+                    scale="utc",
+                    location=location,
                 )
                 if verbose:
                     print(f"Processing {utc.isot}")
-                position = position_buffer[0]
+                elevation = metadata_buffer["elevation"][0]
+                azimuth = metadata_buffer["azimuth"][0]
+                corrupted = False
+                noise_state = False
+                if "corrupted" in metadata_buffer.dtype.names and np.any(
+                    metadata_buffer["corrupted"][0:timebin]
+                ):
+                    corrupted = True
+                if "noise_state" in metadata_buffer.dtype.names:
+                    if np.any(
+                        metadata_buffer["noise_state"][0:timebin] == 1
+                    ) and np.any(metadata_buffer["noise_state"][0:timebin] == 0):
+                        # cal state changed during integration
+                        corrupted = True
+                        noise_state = True
+                    elif np.any(metadata_buffer["noise_state"][0:timebin] == 1):
+                        noise_state = True
                 data_buffer = np.delete(data_buffer, np.s_[0:timebin], axis=0)
-                time_buffer = np.delete(time_buffer, np.s_[0:timebin], axis=0)
-                position_buffer = np.delete(position_buffer, np.s_[0:timebin], axis=0)
+                metadata_buffer = np.delete(metadata_buffer, np.s_[0:timebin], axis=0)
 
                 # Get position in ICRS
                 coord = SkyCoord(
-                    position[1],
-                    position[0],
+                    azimuth,
+                    elevation,
                     unit="deg",
                     frame="altaz",
                     location=location,
@@ -380,15 +395,19 @@ def combine(
                 ).icrs
 
                 # get separation from each source
-                seps = coord.separation(source_coords).to("rad")
+                if sourcefile is not None:
+                    seps = coord.separation(source_coords).to("rad")
 
-                # check off source
-                if seps.min() > hpbwfrac * hpbw:
-                    continue
-                idx = np.argmin(seps)
+                    # check off source
+                    if seps.min() > hpbwfrac * hpbw:
+                        continue
+                    idx = np.argmin(seps)
 
                 # Check if we need to start a new scan
-                if scan is None or scan.attrs["SOURCE"] != sources[idx]["Name"]:
+                if scan is None or (
+                    sourcefile is not None
+                    and scan.attrs["SOURCE"] != sources[idx]["Name"]
+                ):
                     # Flag last integration of previous scan, since the
                     # telescope likely started slewing during it
                     if scan is not None:
@@ -406,14 +425,24 @@ def combine(
                         scan_count -= 1
 
                     # Create new scan
-                    scan = init_scan(
-                        band_sb0,
-                        scan_count,
-                        str(sources[idx]["Name"]),
-                        source_coords[idx],
-                        len(freqaxis),
-                        chunks=chunks,
-                    )
+                    if sourcefile is None:
+                        scan = init_scan(
+                            band_sb0,
+                            scan_count,
+                            "UNKNOWN",
+                            SkyCoord(0.0, 0.0, frame="icrs", unit="hourangle,deg"),
+                            len(freqaxis),
+                            chunks=chunks,
+                        )
+                    else:
+                        scan = init_scan(
+                            band_sb0,
+                            scan_count,
+                            str(sources[idx]["Name"]),
+                            source_coords[idx],
+                            len(freqaxis),
+                            chunks=chunks,
+                        )
                     scan_count += 1
                     if verbose:
                         print(
@@ -427,11 +456,11 @@ def combine(
                     (
                         utc.mjd,
                         utc.isot,
-                        position[1],
-                        position[0],
+                        azimuth,
+                        elevation,
                         hourangle,
                         coord.dec.deg,
-                        0,
+                        1 if noise_state else 0,
                     ),
                     dtype=scan["metadata"].dtype,
                 )
@@ -440,7 +469,7 @@ def combine(
 
                 # store flags
                 scan["flag"].resize(scan["flag"].shape[0] + 1, axis=0)
-                scan["flag"][-1] = null_mask
+                scan["flag"][-1] = flag_mask if corrupted else null_mask
 
                 # store data
                 scan["data"].resize(scan["data"].shape[0] + 1, axis=0)
@@ -483,9 +512,10 @@ def main():
         "-s",
         "--sourcefile",
         type=str,
-        default="sources.txt",
+        default=None,
         help=(
             "R|ASCII file containing source names and J2000 positions\n"
+            + "If not supplied, all data are concatenated into one scan\n"
             + "Format like:\n"
             + "Name     RA           Dec\n"
             + "#        J2000        J2000\n"

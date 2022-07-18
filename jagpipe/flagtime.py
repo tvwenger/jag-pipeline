@@ -31,6 +31,8 @@ import numpy as np
 import time
 import multiprocessing as mp
 import warnings
+import gc
+import os
 
 from . import __version__
 from .utils import add_history
@@ -43,10 +45,12 @@ def worker(inqueue, outqueue, datafile, scan, batchsize, chanbin, window, cutoff
     """
     Multiprocessing worker. Handles batch preparation and flag generation.
     """
+    print(f"Launching worker with PID: {os.getpid()}")
     warnings.filterwarnings(action="ignore", message="All-NaN slice encountered")
 
-    # Chunk cache size = 8 GB ~ 670 default chunks
-    cache_size = 1024 ** 3 * 8
+    # Chunk cache size = 1 GB ~ 67 default chunks
+    # cache_size = 1024 ** 3 * 1
+    cache_size = None
     with h5py.File(datafile, "r", rdcc_nbytes=cache_size) as sdhdf:
         # get data and mask
         data = sdhdf["data"]["beam_0"]["band_SB0"][scan]["data"]
@@ -69,6 +73,7 @@ def worker(inqueue, outqueue, datafile, scan, batchsize, chanbin, window, cutoff
 
             # catch kill worker
             if queue is None:
+                print(f"Killing worker with PID: {os.getpid()}")
                 break
 
             # Unpack index range from queue
@@ -204,12 +209,15 @@ def flagtime(
         # Loop over scans
         starttime = time.time()
         for scan in scans:
+            print()
+            print(scan)
+            print()
             data = sdhdf[f"data/beam_0/band_SB0/{scan}/data"]
             flag = sdhdf[f"data/beam_0/band_SB0/{scan}/flag"]
             metadata = sdhdf[f"data/beam_0/band_SB0/{scan}/metadata"]
 
             # Check that some cal-on data are present
-            if np.all(~metadata['CAL']):
+            if np.all(~metadata["CAL"]):
                 print(f"WARNING: {scan} has no cal-signal-on data")
 
             # skip one-integration scans
@@ -271,6 +279,10 @@ def flagtime(
             outqueue.join_thread()
             pool.close()
             pool.join()
+            gc.collect()
+            print()
+            print("Collecting")
+            print()
 
         # Done
         if verbose:
