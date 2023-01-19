@@ -462,12 +462,12 @@ def combine(
                         if first_off_source is None:
                             print()
                             print("Telescope is off-source")
-                            print(f"Position: {coord.to_string('hmsdms')}")
+                            print(f"Position (J2000): {coord.icrs.to_string('hmsdms', sep=':')}")
                             first_off_source = utc.isot
                         elif num_off_source % 100 == 0:
                             print()
                             print("Telescope remains off-source")
-                            print(f"Position: {coord.to_string('hmsdms')}")
+                            print(f"Position (J2000): {coord.icrs.to_string('hmsdms', sep=':')}")
                         last_off_source = utc.isot
                         continue
                     elif num_off_source > 0:
