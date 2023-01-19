@@ -69,7 +69,6 @@ Also:
 
 ## TODO
 * Deal with scans properly once implemented by JAG filler
-* Get rid of `setsource.py` once implemented by JAG filler
 
 ## Issues and Contributing
 

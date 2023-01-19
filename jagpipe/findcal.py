@@ -3,7 +3,7 @@ findcal.py
 Identify calibration integrations and flag cal off->on
 and on->off integrations.
 
-Copyright(C) 2021 by
+Copyright(C) 2021-2023 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)

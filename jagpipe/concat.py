@@ -4,7 +4,7 @@ Concatenate multiple JAG SDHDF files. This expects "filled" SDHDF
 files, like those produced by combine.py. Scans are merged across
 files if necessary.
 
-Copyright(C) 2021-2022 by
+Copyright(C) 2021-2023 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)

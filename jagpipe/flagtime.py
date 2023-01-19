@@ -3,7 +3,7 @@ flagtime.py
 Identify and flag interference in a SDHDF data file along
 the time axis using multiprocessing.
 
-Copyright(C) 2021-2022 by
+Copyright(C) 2021-2023 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)

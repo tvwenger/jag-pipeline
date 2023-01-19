@@ -5,7 +5,7 @@ assign sources based on telescope position, add "cal" and "flag"
 tables, remove off-source integrations, break observation into
 scans based on position, and output a single SDHDF file.
 
-Copyright(C) 2021-2022 by
+Copyright(C) 2021-2023 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)
@@ -25,6 +25,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Changelog:
 Trey Wenger - January 2022
+Trey Wenger - v0.5a1 - January 2023
+    Backwards compatibility with old filler versions.
 """
 
 import os
@@ -115,7 +117,10 @@ def init_scan(band, scan_num, source, source_coord, num_freq, chunks=None):
     # Scan data
     dat = np.empty((0, 4, num_freq), dtype=float)
     scan_data = scan.create_dataset(
-        "data", data=dat, maxshape=(None, 4, num_freq), chunks=chunks,
+        "data",
+        data=dat,
+        maxshape=(None, 4, num_freq),
+        chunks=chunks,
     )
     scan_data.attrs["NAME"] = "data"
     scan_data.attrs["DESCRIPTION"] = "Data"
@@ -131,7 +136,10 @@ def init_scan(band, scan_num, source, source_coord, num_freq, chunks=None):
     data = np.empty((0, num_freq), dtype=bool)
 
     scan_flag = scan.create_dataset(
-        "flag", data=data, maxshape=(None, num_freq), chunks=(chunks[0], chunks[2]),
+        "flag",
+        data=data,
+        maxshape=(None, num_freq),
+        chunks=(chunks[0], chunks[2]),
     )
     scan_flag.attrs["NAME"] = "flag"
     scan_flag.attrs["DESCRIPTION"] = "Flag"
@@ -197,7 +205,10 @@ def combine(
     if sourcefile is not None:
         sources = np.genfromtxt(sourcefile, dtype=None, names=True, encoding="utf-8")
         source_coords = SkyCoord(
-            sources["RA"], sources["Dec"], frame="icrs", unit="hourangle,deg",
+            sources["RA"],
+            sources["Dec"],
+            frame="icrs",
+            unit="hourangle,deg",
         )
 
     # DRAO position
@@ -296,11 +307,16 @@ def combine(
         # storage for binned data and metadata
         data_buffer = None
         metadata_buffer = None
+        position_buffer = None
+        time_buffer = None
+
+        # tracking off source integrations
+        num_off_source = 0
+        first_off_source = None
+        last_off_source = None
 
         # Loop over input data files
         for datai, datafile in enumerate(datafiles):
-            if verbose:
-                print(f"Reading {datafile}")
             with h5py.File(datafile, "r") as inf:
                 # concatenate data long frequency axis
                 raw_data = np.concatenate(
@@ -311,10 +327,21 @@ def combine(
                     axis=-1,
                 )
 
-                # Read metadata
-                raw_metadata = inf["data"]["beam_0"]["band_SB4"]["scan_0"]["metadata"][
-                    ()
-                ]
+                # flag for old metadata format
+                old_format = (
+                    "metadata" not in inf["data"]["beam_0"]["band_SB4"]["scan_0"].keys()
+                )
+
+                # Read metadata, backwards compatible
+                if old_format:
+                    raw_time = inf["data"]["beam_0"]["band_SB4"]["scan_0"]["time"][()]
+                    raw_position = inf["data"]["beam_0"]["band_SB4"]["scan_0"][
+                        "position"
+                    ][()]
+                else:
+                    raw_metadata = inf["data"]["beam_0"]["band_SB4"]["scan_0"][
+                        "metadata"
+                    ][()]
 
             # bin data in frequency
             pad = raw_data.shape[2] % chanbin
@@ -333,12 +360,22 @@ def combine(
             # add data and metadata to buffer
             if data_buffer is None:
                 data_buffer = raw_data.copy()
-                metadata_buffer = raw_metadata.copy()
+                if old_format:
+                    time_buffer = raw_time.copy()
+                    position_buffer = raw_position.copy()
+                else:
+                    metadata_buffer = raw_metadata.copy()
             else:
                 data_buffer = np.concatenate([data_buffer, raw_data], axis=0)
-                metadata_buffer = np.concatenate(
-                    [metadata_buffer, raw_metadata], axis=0
-                )
+                if old_format:
+                    time_buffer = np.concatenate([time_buffer, raw_time], axis=0)
+                    position_buffer = np.concatenate(
+                        [position_buffer, raw_position], axis=0
+                    )
+                else:
+                    metadata_buffer = np.concatenate(
+                        [metadata_buffer, raw_metadata], axis=0
+                    )
 
             # flag and null flag masks
             flag_mask = np.ones_like(freqaxis.shape[0], dtype=bool)
@@ -356,23 +393,35 @@ def combine(
 
                 # extract rows from buffer, bin in time
                 data = np.mean(data_buffer[0:timebin], axis=0)
-                utc = Time(
-                    metadata_buffer["utc"][0],
-                    format="isot",
-                    scale="utc",
-                    location=location,
-                )
+                if old_format:
+                    utc = Time(
+                        time_buffer[0], format="isot", scale="utc", location=location
+                    )
+                else:
+                    utc = Time(
+                        metadata_buffer["utc"][0],
+                        format="isot",
+                        scale="utc",
+                        location=location,
+                    )
                 if verbose:
-                    print(f"Processing {utc.isot}")
-                elevation = metadata_buffer["elevation"][0]
-                azimuth = metadata_buffer["azimuth"][0]
+                    print(f"Datafile: {datafile} Integration: {utc.isot}", end="\r")
+                if old_format:
+                    azimuth = position_buffer[0][1]
+                    elevation = position_buffer[0][0]
+                else:
+                    elevation = metadata_buffer["elevation"][0]
+                    azimuth = metadata_buffer["azimuth"][0]
+
                 corrupted = False
                 noise_state = False
-                if "corrupted" in metadata_buffer.dtype.names and np.any(
-                    metadata_buffer["corrupted"][0:timebin]
+                if (
+                    not old_format
+                    and "corrupted" in metadata_buffer.dtype.names
+                    and np.any(metadata_buffer["corrupted"][0:timebin])
                 ):
                     corrupted = True
-                if "noise_state" in metadata_buffer.dtype.names:
+                if not old_format and "noise_state" in metadata_buffer.dtype.names:
                     if np.any(
                         metadata_buffer["noise_state"][0:timebin] == 1
                     ) and np.any(metadata_buffer["noise_state"][0:timebin] == 0):
@@ -381,8 +430,17 @@ def combine(
                         noise_state = True
                     elif np.any(metadata_buffer["noise_state"][0:timebin] == 1):
                         noise_state = True
+
                 data_buffer = np.delete(data_buffer, np.s_[0:timebin], axis=0)
-                metadata_buffer = np.delete(metadata_buffer, np.s_[0:timebin], axis=0)
+                if old_format:
+                    time_buffer = np.delete(time_buffer, np.s_[0:timebin], axis=0)
+                    position_buffer = np.delete(
+                        position_buffer, np.s_[0:timebin], axis=0
+                    )
+                else:
+                    metadata_buffer = np.delete(
+                        metadata_buffer, np.s_[0:timebin], axis=0
+                    )
 
                 # Get position in ICRS
                 coord = SkyCoord(
@@ -400,8 +458,28 @@ def combine(
 
                     # check off source
                     if seps.min() > hpbwfrac * hpbw:
+                        num_off_source += 1
+                        if first_off_source is None:
+                            print()
+                            print("Telescope is off-source")
+                            print(f"Position: {coord.to_string('hmsdms')}")
+                            first_off_source = utc.isot
+                        elif num_off_source % 100 == 0:
+                            print()
+                            print("Telescope remains off-source")
+                            print(f"Position: {coord.to_string('hmsdms')}")
+                        last_off_source = utc.isot
                         continue
+                    elif num_off_source > 0:
+                        print()
+                        print(f"Off-source integrations: {num_off_source}")
+                        print(f"From {first_off_source}")
+                        print(f"To {last_off_source}")
                     idx = np.argmin(seps)
+
+                    num_off_source = 0
+                    first_off_source = None
+                    last_off_source = None
 
                 # Check if we need to start a new scan
                 if scan is None or (
@@ -416,6 +494,7 @@ def combine(
                     # delete last scan if it did not meet minint threshold
                     if scan is not None and scan["data"].shape[0] < minint:
                         if verbose:
+                            print()
                             print(
                                 f"Deleting {scan.attrs['NAME']} "
                                 + f"({scan.attrs['SOURCE']}) "
@@ -445,6 +524,7 @@ def combine(
                         )
                     scan_count += 1
                     if verbose:
+                        print()
                         print(
                             f"Creating scan {scan.attrs['NAME']} "
                             + f"({scan.attrs['SOURCE']})"
@@ -488,13 +568,20 @@ def main():
         formatter_class=SmartFormatter,
     )
     parser.add_argument(
-        "--version", action="version", version=__version__,
+        "--version",
+        action="version",
+        version=__version__,
     )
     parser.add_argument(
-        "outfile", type=str, help="Output SDHDF file",
+        "outfile",
+        type=str,
+        help="Output SDHDF file",
     )
     parser.add_argument(
-        "datafiles", type=str, nargs="+", help="Input SDHDF file(s)",
+        "datafiles",
+        type=str,
+        nargs="+",
+        help="Input SDHDF file(s)",
     )
     parser.add_argument(
         "--exposure",
@@ -503,10 +590,18 @@ def main():
         help="Overwrite output exposure to this value",
     )
     parser.add_argument(
-        "-c", "--chanbin", type=int, default=1, help="Channel bin size",
+        "-c",
+        "--chanbin",
+        type=int,
+        default=1,
+        help="Channel bin size",
     )
     parser.add_argument(
-        "-t", "--timebin", type=int, default=1, help="Time bin size",
+        "-t",
+        "--timebin",
+        type=int,
+        default=1,
+        help="Time bin size",
     )
     parser.add_argument(
         "-s",
@@ -538,7 +633,10 @@ def main():
         help="Mininmum number of integrations required to create a scan",
     )
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Print verbose information",
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print verbose information",
     )
     args = parser.parse_args()
     combine(

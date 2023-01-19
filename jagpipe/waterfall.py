@@ -2,7 +2,7 @@
 waterfall.py
 Generate waterfall figures from SDHDF data.
 
-Copyright(C) 2021 by
+Copyright(C) 2021-2023 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)

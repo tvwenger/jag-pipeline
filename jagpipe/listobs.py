@@ -3,7 +3,7 @@ listobs.py
 Print SDHDF observation information (frequency setup, scan
 information, etc.)
 
-Copyright(C) 2021-2022 by
+Copyright(C) 2021-2023 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)

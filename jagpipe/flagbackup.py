@@ -2,7 +2,7 @@
 flagbackup.py
 Backup the flag table to an external file.
 
-Copyright(C) 2021 by
+Copyright(C) 2021-2023 by
 Trey V. Wenger; tvwenger@gmail.com
 
 GNU General Public License v3 (GNU GPLv3)
@@ -48,7 +48,7 @@ def flagbackup(datafile, backupfile):
         raise FileExistsError(f"Will not overwrite {backupfile}")
 
     # Chunk cache size = 8 GB ~ 670 default chunks
-    cache_size = 1024 ** 3 * 8
+    cache_size = 1024**3 * 8
     with h5py.File(datafile, "r", rdcc_nbytes=cache_size) as sdhdf:
         with h5py.File(backupfile, "w") as backuphdf:
             # Loop over scans
@@ -76,13 +76,19 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--version", action="version", version=__version__,
+        "--version",
+        action="version",
+        version=__version__,
     )
     parser.add_argument(
-        "datafile", type=str, help="SDHDF file",
+        "datafile",
+        type=str,
+        help="SDHDF file",
     )
     parser.add_argument(
-        "backupfile", type=str, help="Flag backup HDF file",
+        "backupfile",
+        type=str,
+        help="Flag backup HDF file",
     )
     args = parser.parse_args()
     flagbackup(args.datafile, args.backupfile)
