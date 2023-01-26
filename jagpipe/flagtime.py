@@ -32,7 +32,6 @@ import time
 import multiprocessing as mp
 import warnings
 import gc
-import os
 
 from . import __version__
 from .utils import add_history
@@ -45,7 +44,6 @@ def worker(inqueue, outqueue, datafile, scan, batchsize, chanbin, window, cutoff
     """
     Multiprocessing worker. Handles batch preparation and flag generation.
     """
-    print(f"Launching worker with PID: {os.getpid()}")
     warnings.filterwarnings(action="ignore", message="All-NaN slice encountered")
 
     # Chunk cache size = 1 GB ~ 67 default chunks
@@ -73,7 +71,6 @@ def worker(inqueue, outqueue, datafile, scan, batchsize, chanbin, window, cutoff
 
             # catch kill worker
             if queue is None:
-                print(f"Killing worker with PID: {os.getpid()}")
                 break
 
             # Unpack index range from queue
@@ -186,7 +183,7 @@ def flagtime(
         )
 
     # Chunk cache size = 8 GB ~ 670 default chunks
-    cache_size = 1024 ** 3 * 8
+    cache_size = 1024**3 * 8
     with h5py.File(datafile, "r+", rdcc_nbytes=cache_size) as sdhdf:
         # add history items
         add_history(sdhdf, f"JAG-PIPELINE-FLAGTIME VERSION: {__version__}")
@@ -295,15 +292,19 @@ def flagtime(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Automatically flag SDHDF along frequency axis",
+        description="Automatically flag SDHDF along time axis",
         prog="flagtime.py",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--version", action="version", version=__version__,
+        "--version",
+        action="version",
+        version=__version__,
     )
     parser.add_argument(
-        "datafile", type=str, help="SDHDF file",
+        "datafile",
+        type=str,
+        help="SDHDF file",
     )
     parser.add_argument(
         "--chanbin",
@@ -318,10 +319,16 @@ def main():
         help="Process in batches of this many channels",
     )
     parser.add_argument(
-        "--window", type=int, default=11, help="Rolling window size",
+        "--window",
+        type=int,
+        default=11,
+        help="Rolling window size",
     )
     parser.add_argument(
-        "--cutoff", type=float, default=5.0, help="Sigma clipping threshold",
+        "--cutoff",
+        type=float,
+        default=5.0,
+        help="Sigma clipping threshold",
     )
     parser.add_argument(
         "--grow",
@@ -336,7 +343,10 @@ def main():
         help="Number of CPUs to use in multiprocessing",
     )
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Print verbose information",
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print verbose information",
     )
     args = parser.parse_args()
     flagtime(
